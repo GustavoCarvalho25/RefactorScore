@@ -7,9 +7,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\src\RefactorScore.Application\RefactorScore.Application.csproj" />
-      <ProjectReference Include="..\src\RefactorScore.Domain\RefactorScore.Domain.csproj" />
-      <ProjectReference Include="..\src\RefactorScore.Infrastructure\RefactorScore.Infrastructure.csproj" />
+      <ProjectReference Include="..\RefactorScore.Application\RefactorScore.Application.csproj" />
+      <ProjectReference Include="..\RefactorScore.Domain\RefactorScore.Domain.csproj" />
+      <ProjectReference Include="..\RefactorScore.Infrastructure\RefactorScore.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>
