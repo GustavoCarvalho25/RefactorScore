@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\RefactorScore.CrossCutting.IoC\RefactorScore.CrossCutting.IoC.csproj" />
+    <ProjectReference Include="..\RefactorScore.CrossCutting.IoC\RefactorScore.CrossCutting.IoC.csproj" />
     <ProjectReference Include="..\RefactorScore.Domain\RefactorScore.Domain.csproj" />
     <ProjectReference Include="..\RefactorScore.Application\RefactorScore.Application.csproj" />
     <ProjectReference Include="..\RefactorScore.Infrastructure\RefactorScore.Infrastructure.csproj" />
