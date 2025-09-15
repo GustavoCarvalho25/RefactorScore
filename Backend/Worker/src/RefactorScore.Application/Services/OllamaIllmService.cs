@@ -29,6 +29,7 @@ public class OllamaIllmService : ILLMService
         {
             var prompt = BuildAnalysisPrompt(fileContent);
             var response = await CallOllamaAsync(prompt);
+            //adicionando comentario commits
             return await ParseAnalysisResponse(response);
         }
         catch (Exception ex)
