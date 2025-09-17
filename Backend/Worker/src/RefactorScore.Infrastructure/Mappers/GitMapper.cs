@@ -22,7 +22,7 @@ public partial class GitMapper
             Author = libGitCommit.Author.Name,
             Email = libGitCommit.Author.Email,
             Date = libGitCommit.Author.When.DateTime,
-            Message = libGitCommit.Message,
+            Message = libGitCommit.Message.Trim(),
             MessageShort = libGitCommit.MessageShort
             
         };

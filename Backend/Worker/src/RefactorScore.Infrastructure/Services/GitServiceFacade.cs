@@ -21,7 +21,7 @@ public class GitServiceFacade : IGitServiceFacade
 
     public async Task<CommitData?> GetCommitByIdAsync(string commitId)
     {
-        if (string.IsNullOrEmpty(commitId))
+        if (string.IsNullOrWhiteSpace(commitId))
         {
             _logger.LogInformation("Commit id is null or empty");
             return null;

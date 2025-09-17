@@ -28,7 +28,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
             .Build();
     }
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         await _mongoContainer.StartAsync();
         
