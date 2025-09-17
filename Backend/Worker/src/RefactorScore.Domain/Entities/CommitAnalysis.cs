@@ -1,3 +1,4 @@
+using Ardalis.GuardClauses;
 using RefactorScore.Domain.Exceptions;
 using RefactorScore.Domain.SeedWork;
 using RefactorScore.Domain.ValueObjects;
@@ -15,11 +16,11 @@ public class CommitAnalysis : Entity, IAggregateRoot
     public int AddedLines { get; private set; }
     public int RemovedLines { get; private set; }
 
-    private readonly List<CommitFile> _files = new();
-    private readonly List<Suggestion> _suggestions = new();
+    private List<CommitFile> _files = new();
+    private List<Suggestion> _suggestions = new();
     
-    public IReadOnlyList<CommitFile> Files => _files.AsReadOnly();
-    public IReadOnlyList<Suggestion> Suggestions => _suggestions.AsReadOnly();
+    public List<CommitFile> Files => _files;
+    public List<Suggestion> Suggestions => _suggestions;
     
     public CleanCodeRating? Rating => CalculateOverallRating();
     
@@ -45,8 +46,30 @@ public class CommitAnalysis : Entity, IAggregateRoot
         );
     }
     
+    public void CalculateChanges()
+    {
+        AddedLines = _files.Sum(f => f.AddedLines);
+        RemovedLines = _files.Sum(f => f.RemovedLines);
+    }
+    
     public CommitAnalysis(string commitId, string author, string email, DateTime commitDate, DateTime analysisDate, string language, int addedLines, int removedLines)
     {
+        Guard.Against.NullOrWhiteSpace(commitId, nameof(commitId));
+        Guard.Against.NullOrWhiteSpace(author, nameof(author));
+        Guard.Against.NullOrWhiteSpace(email, nameof(email));
+        Guard.Against.NullOrWhiteSpace(language, nameof(language));
+        Guard.Against.Negative(addedLines, nameof(addedLines));
+        Guard.Against.Negative(removedLines, nameof(removedLines));
+        
+        if (commitDate > DateTime.UtcNow)
+            throw new ArgumentException("CommitDate cannot be in the future", nameof(commitDate));
+        
+        if (analysisDate < commitDate)
+            throw new ArgumentException("AnalysisDate cannot be before CommitDate", nameof(analysisDate));
+        
+        if (!IsValidEmail(email))
+            throw new ArgumentException("Email format is invalid", nameof(email));
+        
         CommitId = commitId;
         Author = author;
         Email = email;
@@ -55,6 +78,19 @@ public class CommitAnalysis : Entity, IAggregateRoot
         Language = language;
         AddedLines = addedLines;
         RemovedLines = removedLines;
+    }
+    
+    private static bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
     }
     
     public void AddFile(CommitFile file)
@@ -75,5 +111,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
             
         file.SetAnalysis(rating, suggestions);
         _suggestions.AddRange(suggestions);
+        
+        CalculateChanges();
     }
 }

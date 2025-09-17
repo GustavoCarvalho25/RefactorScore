@@ -1,4 +1,5 @@
 using RefactorScore.Domain.SeedWork;
+using Ardalis.GuardClauses;
 
 namespace RefactorScore.Domain.ValueObjects;
 
@@ -25,6 +26,18 @@ public class Suggestion : ValueObject
         List<string> studyResources = null
         )
     {
+        // Validações usando Ardalis.GuardClauses
+        Guard.Against.NullOrWhiteSpace(title, nameof(title));
+        Guard.Against.NullOrWhiteSpace(description, nameof(description));
+        Guard.Against.NullOrWhiteSpace(priority, nameof(priority));
+        Guard.Against.NullOrWhiteSpace(type, nameof(type));
+        Guard.Against.NullOrWhiteSpace(difficult, nameof(difficult));
+        Guard.Against.NullOrWhiteSpace(fileReference, nameof(fileReference));
+        
+        // Validação de data
+        if (lastUpdate > DateTime.UtcNow)
+            throw new ArgumentException("LastUpdate cannot be in the future", nameof(lastUpdate));
+        
         Title = title;
         Description = description;
         Priority = priority;
@@ -44,6 +57,14 @@ public class Suggestion : ValueObject
         yield return Difficult;
         yield return FileReference;
         yield return LastUpdate;
-        yield return StudyResources;
+        
+        // Para coleções, precisamos retornar cada item individualmente
+        foreach (var resource in StudyResources)
+        {
+            yield return resource;
+        }
+        
+        // Também incluir o count para garantir que listas de tamanhos diferentes sejam diferentes
+        yield return StudyResources.Count;
     }
 }
