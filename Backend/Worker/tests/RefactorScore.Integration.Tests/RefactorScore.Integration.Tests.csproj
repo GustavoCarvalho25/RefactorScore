@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,6 +30,7 @@
     <ProjectReference Include="..\..\src\RefactorScore.Application\RefactorScore.Application.csproj" />
     <ProjectReference Include="..\..\src\RefactorScore.Domain\RefactorScore.Domain.csproj" />
     <ProjectReference Include="..\..\src\RefactorScore.CrossCutting.IoC\RefactorScore.CrossCutting.IoC.csproj" />
+    <ProjectReference Include="..\RefactorScore.Domain.Tests\RefactorScore.Domain.Tests.csproj" />
   </ItemGroup>
 
 </Project>
