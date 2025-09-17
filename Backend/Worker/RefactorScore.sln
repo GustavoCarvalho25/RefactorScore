@@ -15,11 +15,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.WorkerService
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{8DA184A4-0935-49E0-9F6D-1C62319FD768}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.Core.Tests", "tests\RefactorScore.Core.Tests\RefactorScore.Core.Tests.csproj", "{6B54373E-0054-4EFF-95D9-FFD6C483589E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.Infrastructure.Tests", "tests\RefactorScore.Infrastructure.Tests\RefactorScore.Infrastructure.Tests.csproj", "{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.Domain.Tests", "tests\RefactorScore.Domain.Tests\RefactorScore.Domain.Tests.csproj", "{6B54373E-0054-4EFF-95D9-FFD6C483589E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.CrossCutting.IoC", "src\RefactorScore.CrossCutting.IoC\RefactorScore.CrossCutting.IoC.csproj", "{4761D734-17F0-40F2-BAE9-7E6577027164}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.Application.Tests", "tests\RefactorScore.Application.Tests\RefactorScore.Application.Tests.csproj", "{2BF3BE81-98AA-4253-B664-9BD95CDC3222}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefactorScore.Integration.Tests", "tests\RefactorScore.Integration.Tests\RefactorScore.Integration.Tests.csproj", "{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -50,14 +52,18 @@ Global
 		{6B54373E-0054-4EFF-95D9-FFD6C483589E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6B54373E-0054-4EFF-95D9-FFD6C483589E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6B54373E-0054-4EFF-95D9-FFD6C483589E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4761D734-17F0-40F2-BAE9-7E6577027164}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{4761D734-17F0-40F2-BAE9-7E6577027164}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4761D734-17F0-40F2-BAE9-7E6577027164}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4761D734-17F0-40F2-BAE9-7E6577027164}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2BF3BE81-98AA-4253-B664-9BD95CDC3222}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2BF3BE81-98AA-4253-B664-9BD95CDC3222}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2BF3BE81-98AA-4253-B664-9BD95CDC3222}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2BF3BE81-98AA-4253-B664-9BD95CDC3222}.Release|Any CPU.Build.0 = Release|Any CPU
+		{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{66DC8FE7-2B18-49C9-B195-F023D47C1904} = {12A59917-BD56-498B-8CC2-23F1678DCF3B}
@@ -65,7 +71,8 @@ Global
 		{E88530E6-0BEF-49FB-A0BC-8FE4D7DCF384} = {12A59917-BD56-498B-8CC2-23F1678DCF3B}
 		{A2334240-50AF-4303-9603-09C95487386C} = {12A59917-BD56-498B-8CC2-23F1678DCF3B}
 		{6B54373E-0054-4EFF-95D9-FFD6C483589E} = {8DA184A4-0935-49E0-9F6D-1C62319FD768}
-		{7B20F8B0-C2E6-4F39-B169-005BEEEBAFEE} = {8DA184A4-0935-49E0-9F6D-1C62319FD768}
 		{4761D734-17F0-40F2-BAE9-7E6577027164} = {12A59917-BD56-498B-8CC2-23F1678DCF3B}
+		{2BF3BE81-98AA-4253-B664-9BD95CDC3222} = {8DA184A4-0935-49E0-9F6D-1C62319FD768}
+		{06CCBB3C-0D46-4963-AD2F-15FF7F6C5DE4} = {8DA184A4-0935-49E0-9F6D-1C62319FD768}
 	EndGlobalSection
 EndGlobal
