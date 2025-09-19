@@ -1,6 +1,10 @@
 
 // Importa o framework Express para criar o servidor HTTP
 import express from 'express'
+import dotenv from 'dotenv'
+import { MongoClient } from 'mongodb';
+
+dotenv.config()
 
 // Cria uma instância do aplicativo Express
 const app = express()
@@ -15,170 +19,170 @@ let nextId = 1
 // GET /api/analises-commits → Lista análises (com filtros 
 // e paginação)
 app.get('/api/analises-commits', (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, autor, dataInicio, dataFim } = req.query
-    let filteredAnalises = [...analisesCommits]
-
-    // Aplicar filtros
-    if (status) {
-      filteredAnalises = filteredAnalises.filter(analise => analise.status === status)
-    }
-    if (autor) {
-      filteredAnalises = filteredAnalises.filter(analise =>
-        analise.autor.toLowerCase().includes(autor.toLowerCase())
-      )
-    }
-    if (dataInicio) {
-      const inicio = new Date(dataInicio)
-      filteredAnalises = filteredAnalises.filter(analise =>
-        new Date(analise.dataAnalise) >= inicio
-      )
-    }
-    if (dataFim) {
-      const fim = new Date(dataFim)
-      filteredAnalises = filteredAnalises.filter(analise =>
-        new Date(analise.dataAnalise) <= fim
-      )
-    }
-
-    // Ordenar por data decrescente (mais recentes primeiro)
-    filteredAnalises.sort((a, b) => new Date(b.dataAnalise) - new Date(a.dataAnalise))
-
-    // Paginação
-    const startIndex = (parseInt(page) - 1) * parseInt(limit)
-    const endIndex = startIndex + parseInt(limit)
-    const paginatedAnalises = filteredAnalises.slice(startIndex, endIndex)
-
-    res.json({
-      success: true,
-      data: paginatedAnalises,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: filteredAnalises.length,
-        totalPages: Math.ceil(filteredAnalises.length / parseInt(limit))
-      }
-    })
-  } catch (error) {
-    res.status(500).json({
+  // Nova implementação usando MongoDB
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({
       success: false,
-      error: 'Erro interno do servidor',
-      message: error.message
-    })
+      error: 'Variável de ambiente MONGODB_URI não definida ou inválida.'
+    });
   }
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      const { page = 1, limit = 10, status, autor, dataInicio, dataFim } = req.query;
+      await client.connect();
+  const db = client.db('local');
+  const collection = db.collection('RefactorScore');
+
+      // Monta filtro dinâmico
+      const query = {};
+      if (status) query.status = status;
+      if (autor) query.autor = { $regex: autor, $options: 'i' };
+      if (dataInicio || dataFim) {
+        query.dataAnalise = {};
+        if (dataInicio) query.dataAnalise.$gte = new Date(dataInicio);
+        if (dataFim) query.dataAnalise.$lte = new Date(dataFim);
+      }
+
+      // Conta total filtrado
+      const total = await collection.countDocuments(query);
+      // Busca paginada e ordenada
+      const analises = await collection
+        .find(query)
+        .sort({ dataAnalise: -1 })
+        .skip((parseInt(page) - 1) * parseInt(limit))
+        .limit(parseInt(limit))
+        .toArray();
+
+      res.json({
+        success: true,
+        data: analises,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / parseInt(limit))
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor',
+        message: error.message
+      });
+    } finally {
+      await client.close();
+    }
+  })();
 })
 
 // GET /api/analises-commits/{id} → Detalhes de uma análise específica
 app.get('/api/analises-commits/:id', (req, res) => {
-  try {
-    const { id } = req.params
-    const analise = analisesCommits.find(a => a.id === parseInt(id))
-
-    if (!analise) {
-      return res.status(404).json({
-        success: false,
-        error: 'Análise não encontrada'
-      })
-    }
-
-    res.json({
-      success: true,
-      data: analise
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Erro interno do servidor',
-      message: error.message
-    })
+  // Busca análise específica no MongoDB
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
   }
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      const { id } = req.params;
+      await client.connect();
+      const db = client.db('local');
+      const collection = db.collection('RefactorScore');
+      const analise = await collection.findOne({ id: parseInt(id) });
+      if (!analise) {
+        return res.status(404).json({ success: false, error: 'Análise não encontrada' });
+      }
+      res.json({ success: true, data: analise });
+    } catch (error) {
+      res.status(500).json({ success: false, error: 'Erro interno do servidor', message: error.message });
+    } finally {
+      await client.close();
+    }
+  })();
 })
 
 // POST /api/analises-commits → Criar nova análise de commit
 app.post('/api/analises-commits', (req, res) => {
-  try {
-    const { titulo, descricao, autor, status, pontuacaoRefatoracao, commitsAnalisados, recomendacoes } = req.body
-
-    // Validação básica
-    if (!titulo || !autor) {
-      return res.status(400).json({
-        success: false,
-        error: 'Título e autor são obrigatórios'
-      })
-    }
-
-    const novaAnalise = {
-      id: nextId++,
-      titulo,
-      descricao: descricao || '',
-      autor,
-      status: status || 'pendente',
-      pontuacaoRefatoracao: pontuacaoRefatoracao || 0,
-      commitsAnalisados: commitsAnalisados || [],
-      recomendacoes: recomendacoes || [],
-      dataAnalise: new Date().toISOString(),
-      dataCriacao: new Date().toISOString(),
-      dataAtualizacao: new Date().toISOString()
-    }
-
-    analisesCommits.push(novaAnalise)
-
-    res.status(201).json({
-      success: true,
-      data: novaAnalise,
-      message: 'Análise criada com sucesso'
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Erro interno do servidor',
-      message: error.message
-    })
+  // Cria nova análise no MongoDB
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
   }
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      const { titulo, descricao, autor, status, pontuacaoRefatoracao, commitsAnalisados, recomendacoes } = req.body;
+      if (!titulo || !autor) {
+        return res.status(400).json({ success: false, error: 'Título e autor são obrigatórios' });
+      }
+      // Gera id único (timestamp + random)
+      const novaAnalise = {
+        id: Date.now(),
+        titulo,
+        descricao: descricao || '',
+        autor,
+        status: status || 'pendente',
+        pontuacaoRefatoracao: pontuacaoRefatoracao || 0,
+        commitsAnalisados: commitsAnalisados || [],
+        recomendacoes: recomendacoes || [],
+        dataAnalise: new Date().toISOString(),
+        dataCriacao: new Date().toISOString(),
+        dataAtualizacao: new Date().toISOString()
+      };
+      await client.connect();
+      const db = client.db('local');
+      const collection = db.collection('RefactorScore');
+      await collection.insertOne(novaAnalise);
+      res.status(201).json({ success: true, data: novaAnalise, message: 'Análise criada com sucesso' });
+    } catch (error) {
+      res.status(500).json({ success: false, error: 'Erro interno do servidor', message: error.message });
+    } finally {
+      await client.close();
+    }
+  })();
 })
 
 // PUT /api/analises-commits/{id} → Atualizar análise existente
 app.put('/api/analises-commits/:id', (req, res) => {
-  try {
-    const { id } = req.params
-    const analiseIndex = analisesCommits.findIndex(a => a.id === parseInt(id))
-
-    if (analiseIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        error: 'Análise não encontrada'
-      })
-    }
-
-    const { titulo, descricao, autor, status, pontuacaoRefatoracao, commitsAnalisados, recomendacoes } = req.body
-
-    // Atualizar apenas os campos fornecidos
-    const analiseAtualizada = {
-      ...analisesCommits[analiseIndex],
-      ...(titulo !== undefined && { titulo }),
-      ...(descricao !== undefined && { descricao }),
-      ...(autor !== undefined && { autor }),
-      ...(status !== undefined && { status }),
-      ...(pontuacaoRefatoracao !== undefined && { pontuacaoRefatoracao }),
-      ...(commitsAnalisados !== undefined && { commitsAnalisados }),
-      ...(recomendacoes !== undefined && { recomendacoes }),
-      dataAtualizacao: new Date().toISOString()
-    }
-
-    analisesCommits[analiseIndex] = analiseAtualizada
-
-    res.json({
-      success: true,
-      data: analiseAtualizada,
-      message: 'Análise atualizada com sucesso'
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Erro interno do servidor',
-      message: error.message
-    })
+  // Atualiza análise existente no MongoDB
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
   }
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      const { id } = req.params;
+      const { titulo, descricao, autor, status, pontuacaoRefatoracao, commitsAnalisados, recomendacoes } = req.body;
+      await client.connect();
+      const db = client.db('local');
+      const collection = db.collection('RefactorScore');
+      const analise = await collection.findOne({ id: parseInt(id) });
+      if (!analise) {
+        return res.status(404).json({ success: false, error: 'Análise não encontrada' });
+      }
+      const analiseAtualizada = {
+        ...analise,
+        ...(titulo !== undefined && { titulo }),
+        ...(descricao !== undefined && { descricao }),
+        ...(autor !== undefined && { autor }),
+        ...(status !== undefined && { status }),
+        ...(pontuacaoRefatoracao !== undefined && { pontuacaoRefatoracao }),
+        ...(commitsAnalisados !== undefined && { commitsAnalisados }),
+        ...(recomendacoes !== undefined && { recomendacoes }),
+        dataAtualizacao: new Date().toISOString()
+      };
+      await collection.replaceOne({ id: parseInt(id) }, analiseAtualizada);
+      res.json({ success: true, data: analiseAtualizada, message: 'Análise atualizada com sucesso' });
+    } catch (error) {
+      res.status(500).json({ success: false, error: 'Erro interno do servidor', message: error.message });
+    } finally {
+      await client.close();
+    }
+  })();
 })
 
 // Rota de saúde da API

@@ -123,7 +123,7 @@ public class OllamaIllmService : ILLMService
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content);
+        var response = await _httpClient.PostAsync($"{_ollamaUrl}api/generate", content);
         response.EnsureSuccessStatusCode();
 
         var responseContent = await response.Content.ReadAsStringAsync();
