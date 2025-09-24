@@ -17,10 +17,10 @@ public class OllamaIllmService : ILLMService
 
     public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, string ollamaUrl, IConfiguration configuration)
     {
-        _logger = logger;
-        _httpClient = httpClient;
-        _ollamaUrl = ollamaUrl;
-        _configuration = configuration;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _ollamaUrl = ollamaUrl ?? throw new ArgumentNullException(nameof(ollamaUrl));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task<LLMAnalysisResult> AnalyzeFileAsync(string fileContent)
@@ -41,6 +41,8 @@ public class OllamaIllmService : ILLMService
 
     public async Task<List<LLMSuggestion>> GenerateSuggestionsAsync(string fileContent, CleanCodeRating rating)
     {
+        ArgumentNullException.ThrowIfNull(rating);
+
         try
         {
             var prompt = BuildSuggestionsPrompt(fileContent, rating);
@@ -282,11 +284,18 @@ public class OllamaIllmService : ILLMService
             
             suggestions = JsonSerializer.Deserialize<List<LLMSuggestion>>(jsonContent, options);
             
-            if (suggestions == null || !suggestions.Any())
+            if (suggestions == null)
             {
                 _logger.LogWarning("Deserialized suggestions list is null or empty");
                 return false;
             }
+            
+            if (!suggestions.Any())
+            {
+                _logger.LogInformation("Successfully parsed empty suggestions list");
+                return true;
+            }
+
             
             var validSuggestions = suggestions
                 .Where(s => !string.IsNullOrWhiteSpace(s.Title) && !string.IsNullOrWhiteSpace(s.Description))
