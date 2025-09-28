@@ -654,6 +654,172 @@ public class OllamaIllmServiceUnitTests
     }
 
     #endregion
+    
+    #region ClampScore Validation Tests
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithScoreAbove10_ShouldDivideBy10()
+    {
+        // Arrange
+        var highScoreJsonResponse = """
+        {
+            "response": "{\"variableScore\": 100, \"functionScore\": 80, \"commentScore\": 9, \"cohesionScore\": 50, \"deadCodeScore\": 10, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", highScoreJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(10);
+        result.FunctionScore.Should().Be(8); 
+        result.CommentScore.Should().Be(9);
+        result.CohesionScore.Should().Be(5);
+        result.DeadCodeScore.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithScoreBelow1_ShouldClampTo1()
+    {
+        // Arrange
+        var lowScoreJsonResponse = """
+        {
+            "response": "{\"variableScore\": -5, \"functionScore\": 0, \"commentScore\": 9, \"cohesionScore\": 8, \"deadCodeScore\": 10, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", lowScoreJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(1);
+        result.FunctionScore.Should().Be(1);
+        result.CommentScore.Should().Be(9);
+        result.CohesionScore.Should().Be(8);
+        result.DeadCodeScore.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithMixedOutOfRangeScores_ShouldProcessCorrectly()
+    {
+        // Arrange
+        var mixedScoreJsonResponse = """
+        {
+            "response": "{\"variableScore\": 90, \"functionScore\": -10, \"commentScore\": 5, \"cohesionScore\": 70, \"deadCodeScore\": 1, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", mixedScoreJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(9);
+        result.FunctionScore.Should().Be(1);
+        result.CommentScore.Should().Be(5);
+        result.CohesionScore.Should().Be(7);
+        result.DeadCodeScore.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithBoundaryScores_ShouldPreserveBoundaries()
+    {
+        // Arrange
+        var boundaryScoreJsonResponse = """
+        {
+            "response": "{\"variableScore\": 1, \"functionScore\": 10, \"commentScore\": 1, \"cohesionScore\": 10, \"deadCodeScore\": 5, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", boundaryScoreJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(1);
+        result.FunctionScore.Should().Be(10);
+        result.CommentScore.Should().Be(1);
+        result.CohesionScore.Should().Be(10);
+        result.DeadCodeScore.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithScaleDivisionScores_ShouldConvertCorrectly()
+    {
+        // Arrange
+        var scaleConversionJsonResponse = """
+        {
+            "response": "{\"variableScore\": 85, \"functionScore\": 65, \"commentScore\": 95, \"cohesionScore\": 45, \"deadCodeScore\": 25, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", scaleConversionJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(8);
+        result.FunctionScore.Should().Be(6);
+        result.CommentScore.Should().Be(9);
+        result.CohesionScore.Should().Be(4);
+        result.DeadCodeScore.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_WithExtremeScores_ShouldHandleGracefully()
+    {
+        // Arrange
+        var extremeScoreJsonResponse = """
+        {
+            "response": "{\"variableScore\": 1000, \"functionScore\": -2147483648, \"commentScore\": 150, \"cohesionScore\": 0, \"deadCodeScore\": 999, \"justifications\": {\"VariableNaming\": \"Good names\", \"FunctionSizes\": \"Appropriate sizes\"}}"
+        }
+        """;
+        
+        _mockHttp.When($"{_ollamaUrl}/api/generate")
+                 .Respond("application/json", extremeScoreJsonResponse);
+        
+        var service = CreateService();
+        
+        // Act
+        var result = await service.AnalyzeFileAsync("test code");
+        
+        // Assert
+        result.Should().NotBeNull();
+        result.VariableScore.Should().Be(10);
+        result.FunctionScore.Should().Be(1);
+        result.CommentScore.Should().Be(10);
+        result.CohesionScore.Should().Be(1);
+        result.DeadCodeScore.Should().Be(10);
+    }
+
+    #endregion
 
     protected virtual void Dispose(bool disposing)
     {
