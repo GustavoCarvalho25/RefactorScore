@@ -88,7 +88,7 @@ public class OllamaIllmService : ILLMService
     private string BuildAnalysisPrompt(string fileContent)
     {
         return $@"
-            Analise o seguinte código e avalie de 1 a 10 os seguintes critérios de Clean Code:
+            Analise o seguinte código e avalie estritamente de 1 a 10 os seguintes critérios de Clean Code:
 
             1. Variable Naming (nomenclatura de variáveis)
             2. Function Sizes (tamanho das funções)
@@ -110,8 +110,10 @@ public class OllamaIllmService : ILLMService
                 ""VariableNaming"": ""Nomes descritivos e claros"",
                 ""FunctionSizes"": ""Funções pequenas e focadas""
               }}
-            }}";
-    }
+            }}
+
+             ""IMPORTANTE: Todos os scores devem ser números inteiros entre 1 e 10. NÃO use porcentagens, NÃO use números maiores que 10.
+            ";  }
 
     private async Task<string> CallOllamaAsync(string prompt)
     {
@@ -439,11 +441,11 @@ public class OllamaIllmService : ILLMService
 
             result = new LLMAnalysisResult
             {
-                VariableScore = scoreElement.GetProperty("variableScore").GetInt32(),
-                FunctionScore = scoreElement.GetProperty("functionScore").GetInt32(),
-                CommentScore = scoreElement.GetProperty("commentScore").GetInt32(),
-                CohesionScore = scoreElement.GetProperty("cohesionScore").GetInt32(),
-                DeadCodeScore = scoreElement.GetProperty("deadCodeScore").GetInt32()
+                VariableScore = ClampScore(scoreElement.GetProperty("variableScore").GetInt32()),
+                FunctionScore = ClampScore(scoreElement.GetProperty("functionScore").GetInt32()),
+                CommentScore = ClampScore(scoreElement.GetProperty("commentScore").GetInt32()),
+                CohesionScore = ClampScore(scoreElement.GetProperty("cohesionScore").GetInt32()),
+                DeadCodeScore = ClampScore(scoreElement.GetProperty("deadCodeScore").GetInt32())
             };
 
             if (scoreElement.TryGetProperty("justifications", out var justifications))
@@ -469,6 +471,33 @@ public class OllamaIllmService : ILLMService
             _logger.LogWarning(ex, "Unexpected error during JSON parsing: {Error}", ex.Message);
             return false;
         }
+    }
+    
+    private int ClampScore(int score)
+    {
+        if (score < 1)
+        {
+            _logger.LogWarning("Score {Score} is below minimum (1), clamping to 1", score);
+            return 1;
+        }
+        if (score > 10)
+        {
+            _logger.LogWarning("Score {Score} is above maximum (10), clamping to 10", score);
+            score /= 10;
+            
+            if (score < 1)
+            {
+                _logger.LogWarning("Score {Score} is below minimum (1) after clamping, clamping to 1", score);
+                return 1;
+            }
+
+            if (score > 10)
+            {
+                _logger.LogWarning("Score {Score} is above maximum (10) after clamping, clamping to 10", score);
+                score = 10;
+            }
+        }
+        return score;
     }
 
     private async Task<string> FixJsonWithLlmAsync(string brokenJson, int maxRetries = 5)
