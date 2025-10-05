@@ -32,7 +32,7 @@ public class CommitAnalysisBuilder
         _author = _faker.Person.FullName;
         _email = _faker.Person.Email;
         _commitDate = _faker.Date.Recent(30);
-        _analysisDate = _faker.Date.Recent(1);
+        _analysisDate = _commitDate;
         _language = _faker.PickRandom("C#", "Java", "JavaScript", "Python", "TypeScript");
         _addedLines = _faker.Random.Int(1, 500);
         _removedLines = _faker.Random.Int(0, 100);

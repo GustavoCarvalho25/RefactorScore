@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using RefactorScore.Application.Services;
 using RefactorScore.CrossCutting.IoC.Configuration;
 using RefactorScore.Domain.Repositories;
 using RefactorScore.Domain.Services;
+using RefactorScore.Infrastructure.Configurations;
 using RefactorScore.Infrastructure.Mappers;
 using RefactorScore.Infrastructure.Repositories;
 using RefactorScore.Infrastructure.Services;
@@ -41,13 +43,15 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<GitMapper>();
         
         services.AddHttpClient();
-
+        
+        services.Configure<OllamaSettings>(configuration.GetSection("Ollama"));
+        
         services.AddSingleton<ILLMService>(sp =>
         {
             var httpClient = sp.GetRequiredService<HttpClient>();
             var logger = sp.GetRequiredService<ILogger<OllamaIllmService>>();
-            var ollamaSettings = configuration.GetSection("Ollama").Get<OllamaSettings>();
-            return new OllamaIllmService(logger, httpClient, ollamaSettings.BaseUrl, configuration);
+            var ollamaSettings = sp.GetRequiredService<IOptions<OllamaSettings>>();
+            return new OllamaIllmService(logger, httpClient, configuration, ollamaSettings);
         });
 
         return services;

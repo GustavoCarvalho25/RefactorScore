@@ -11,8 +11,10 @@ using RefactorScore.Application.Services;
 using RefactorScore.Integration.Tests.Infrastructure;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using Microsoft.Extensions.Options;
 using RefactorScore.Domain.Services;
 using RefactorScore.Domain.Tests.Builders;
+using RefactorScore.Infrastructure.Configurations;
 using Xunit;
 
 namespace RefactorScore.Integration.Tests.Services;
@@ -42,6 +44,21 @@ public class OllamaIllmServiceIntegrationTests : IntegrationTestBase
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilHttpRequestIsSucceeded(r => r.ForPort(11434).ForPath("/")))
             .Build();
+    }
+    
+    private IConfiguration CreateConfiguration()
+    {
+        var configurationBuilder = new ConfigurationBuilder();
+        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string>
+        {
+            ["Ollama:Model"] = "tinyllama",
+            ["Ollama:BaseUrl"] = $"http://localhost:{_ollamaContainer.GetMappedPublicPort(11434)}",
+            ["Ollama:TimeoutSeconds"] = "300",
+            ["Ollama:AnalysisTimeoutSeconds"] = "180",
+            ["Ollama:SuggestionsTimeoutSeconds"] = "120"
+        });
+        
+        return configurationBuilder.Build();
     }
     
 
@@ -84,8 +101,24 @@ public class OllamaIllmServiceIntegrationTests : IntegrationTestBase
         await PullTestModel();
         
         var configuration = CreateConfiguration();
+        
         var ollamaUrl = $"http://localhost:{_ollamaContainer.GetMappedPublicPort(11434)}";
-        _llmService = new OllamaIllmService(_logger, _httpClient, ollamaUrl, configuration);
+        
+        var ollamaSettings = new OllamaSettings
+        {
+            BaseUrl = ollamaUrl,
+            Model = "tinyllama",
+            TimeoutSeconds = 300,
+            AnalysisTimeoutSeconds = 180,
+            SuggestionsTimeoutSeconds = 120,
+            MaxJsonFixRetries = 5,
+            EnableDetailedLogging = true,
+            HealthCheckTimeoutSeconds = 30
+        };
+
+        var ollamaOptions = Options.Create(ollamaSettings);
+
+        _llmService = new OllamaIllmService(_logger, _httpClient, configuration, ollamaOptions );
     }
 
     [Fact]
@@ -164,17 +197,6 @@ public class OllamaIllmServiceIntegrationTests : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK, "Ollama container should be healthy");
-    }
-
-    private IConfiguration CreateConfiguration()
-    {
-        var config = Substitute.For<IConfiguration>();
-        config["Ollama:BaseUrl"].Returns($"http://localhost:{_ollamaContainer.GetMappedPublicPort(11434)}");
-        
-        // Usar sempre tinyllama para testes (mais rápido e confiável)
-        config["Ollama:Model"].Returns("tinyllama");
-        
-        return config;
     }
 
     private async Task<string> CreateTempFileAsync(string fileName, string content)

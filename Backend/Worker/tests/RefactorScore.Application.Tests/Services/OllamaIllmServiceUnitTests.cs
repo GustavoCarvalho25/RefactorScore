@@ -3,10 +3,12 @@ using System.Text;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using RichardSzalay.MockHttp;
 using RefactorScore.Application.Services;
 using RefactorScore.Domain.Tests.Builders;
+using RefactorScore.Infrastructure.Configurations;
 using Xunit;
 
 namespace RefactorScore.Application.Tests.Services;
@@ -17,12 +19,14 @@ public class OllamaIllmServiceUnitTests
     private readonly IConfiguration _configuration;
     private readonly MockHttpMessageHandler _mockHttp;
     private readonly string _ollamaUrl = "http://localhost:11434";
+    private readonly IOptions<OllamaSettings> _ollamaOptions;
 
     public OllamaIllmServiceUnitTests()
     {
         _logger = Substitute.For<ILogger<OllamaIllmService>>();
         _configuration = CreateConfiguration();
         _mockHttp = new MockHttpMessageHandler();
+        _ollamaOptions = CreateOllamaOptions();
     }
 
     private IConfiguration CreateConfiguration()
@@ -32,10 +36,26 @@ public class OllamaIllmServiceUnitTests
         return config;
     }
 
+    private IOptions<OllamaSettings> CreateOllamaOptions()
+    {
+        var settings = new OllamaSettings
+        {
+            BaseUrl = _ollamaUrl,
+            Model = "tinyllama",
+            TimeoutSeconds = 300,
+            AnalysisTimeoutSeconds = 180,
+            SuggestionsTimeoutSeconds = 120,
+            MaxJsonFixRetries = 5,
+            EnableDetailedLogging = false,
+            HealthCheckTimeoutSeconds = 30
+        };
+        return Options.Create(settings);
+    }
+
     private OllamaIllmService CreateService()
     {
         var httpClient = _mockHttp.ToHttpClient();
-        return new OllamaIllmService(_logger, httpClient, _ollamaUrl, _configuration);
+        return new OllamaIllmService(_logger, httpClient, _configuration, _ollamaOptions);
     }
 
     #region AnalyzeFileAsync Tests
@@ -482,7 +502,7 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(null, _mockHttp.ToHttpClient(), "http://localhost:11434", _configuration));
+            new OllamaIllmService(null, _mockHttp.ToHttpClient(), _configuration, _ollamaOptions));
     }
 
     [Fact]
@@ -490,7 +510,7 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(_logger, null, "http://localhost:11434", _configuration));
+            new OllamaIllmService(_logger, null, _configuration, _ollamaOptions));
     }
 
     [Fact]
@@ -498,7 +518,15 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), "http://localhost:11434", null));
+            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), null, _ollamaOptions));
+    }
+
+    [Fact]
+    public void Constructor_WithNullOllamaOptions_ShouldThrowArgumentNullException()
+    {
+        // Arrange & Act & Assert
+        Assert.Throws<ArgumentNullException>(() => 
+            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), _configuration, null));
     }
 
     [Fact]
