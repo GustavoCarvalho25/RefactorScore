@@ -48,13 +48,13 @@ public class Worker : BackgroundService
                 _logger.LogInformation("Starting commit analysis cycle at: {time}", DateTimeOffset.Now);
 
                 var recentCommits = await _gitService.GetCommitsByPeriodAsync(
-                    DateTime.Now.AddDays(-7), 
+                    DateTime.Now.AddDays(-400), 
                     DateTime.Now
                 );
 
                 _logger.LogInformation("Found {Count} commits to analyze", recentCommits.Count);
 
-                foreach (var commit in recentCommits.Take(5))
+                foreach (var commit in recentCommits)
                 {
                     try
                     {

@@ -2,9 +2,11 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RefactorScore.Domain.Models;
 using RefactorScore.Domain.Services;
 using RefactorScore.Domain.ValueObjects;
+using RefactorScore.Infrastructure.Configurations;
 
 namespace RefactorScore.Application.Services;
 
@@ -14,12 +16,18 @@ public class OllamaIllmService : ILLMService
     private readonly ILogger<OllamaIllmService> _logger;
     private readonly string _ollamaUrl;
     private readonly IConfiguration _configuration;
+    private readonly OllamaSettings _ollamaSettings;
 
-    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, string ollamaUrl, IConfiguration configuration)
+    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, IConfiguration configuration, IOptions<OllamaSettings> ollamaOptions)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _ollamaUrl = ollamaUrl ?? throw new ArgumentNullException(nameof(ollamaUrl));
+
+        if (ollamaOptions == null)
+            throw new ArgumentNullException(nameof(ollamaOptions));
+            
+        _ollamaSettings = ollamaOptions.Value ?? throw new ArgumentNullException(nameof(ollamaOptions.Value));
+        _ollamaUrl = _ollamaSettings.BaseUrl ?? throw new ArgumentNullException(nameof(_ollamaSettings.BaseUrl));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
@@ -116,7 +124,8 @@ public class OllamaIllmService : ILLMService
 
     private async Task<string> CallOllamaAsync(string prompt)
     {
-        var model = _configuration["Ollama:Model"];
+        var timeoutSeconds = _ollamaSettings.AnalysisTimeoutSeconds;
+        var model = _ollamaSettings.Model;
         var request = new
         {
             model,
@@ -126,30 +135,49 @@ public class OllamaIllmService : ILLMService
 
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content);
-        response.EnsureSuccessStatusCode();
-
-        var responseContent = await response.Content.ReadAsStringAsync();
         
-        using var doc = JsonDocument.Parse(responseContent);
-        var root = doc.RootElement;
+        using var cts = new CancellationTokenSource();
 
-        if (!root.TryGetProperty("response", out var responseProperty))
+        if (timeoutSeconds > 0)
         {
-            _logger.LogWarning("No 'response' property found in LLM response, using default values");
-            throw new InvalidOperationException("No 'response' property found in LLM response");
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            
+            if (_ollamaSettings.EnableDetailedLogging)
+                _logger.LogInformation("HttpClient timeout configured to {TimeoutSeconds} seconds", timeoutSeconds);
         }
-        
-        var llmResponse = responseProperty.GetString();
-        
-        if (string.IsNullOrEmpty(llmResponse))
+
+        try
         {
-            _logger.LogWarning("Empty LLM response, using default values");
-            throw new InvalidOperationException("Empty LLM response");;
-        }
+            var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
         
-        return llmResponse;
+            using var doc = JsonDocument.Parse(responseContent);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("response", out var responseProperty))
+            {
+                _logger.LogWarning("No 'response' property found in LLM response, using default values");
+                throw new InvalidOperationException("No 'response' property found in LLM response");
+            }
+        
+            var llmResponse = responseProperty.GetString();
+        
+            if (string.IsNullOrEmpty(llmResponse))
+            {
+                _logger.LogWarning("Empty LLM response, using default values");
+                throw new InvalidOperationException("Empty LLM response");
+            }
+        
+            return llmResponse;
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
+        {
+            var usedTimeout = timeoutSeconds > 0 ? timeoutSeconds : _ollamaSettings.TimeoutSeconds;
+            _logger.LogWarning("LLM request timed out after {TimeoutSeconds} seconds", usedTimeout);
+            throw new TimeoutException($"LLM request timed out after {usedTimeout} seconds");
+        }
     }
 
     private async Task<LLMAnalysisResult> ParseAnalysisResponse(string response)
@@ -499,8 +527,10 @@ public class OllamaIllmService : ILLMService
         return score;
     }
 
-    private async Task<string> FixJsonWithLlmAsync(string brokenJson, int maxRetries = 5)
+    private async Task<string> FixJsonWithLlmAsync(string brokenJson)
     {
+        var maxRetries = _ollamaSettings.MaxJsonFixRetries;
+        
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
             try
