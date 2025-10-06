@@ -50,43 +50,86 @@ public class OllamaIllmService : ILLMService
     {
         ArgumentNullException.ThrowIfNull(rating);
 
-        try
+        var prompt = BuildSuggestionsPrompt(fileContent, rating);
+
+        const int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var prompt = BuildSuggestionsPrompt(fileContent, rating);
-            var response = await CallOllamaAsync(prompt);
-            return await ParseSuggestionsResponse(response);
+            try
+            {
+                if (attempt > 1)
+                {
+                    _logger.LogInformation("Retrying suggestions request (attempt {Attempt}/{MaxAttempts})", attempt, maxAttempts);
+                }
+
+                var response = await CallOllamaAsync(prompt);
+                return await ParseSuggestionsResponse(response);
+            }
+            catch (TimeoutException tex)
+            {
+                _logger.LogWarning(tex, "Suggestions request timed out on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (HttpRequestException hex)
+            {
+                _logger.LogWarning(hex, "HTTP error during suggestions on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (OperationCanceledException oce)
+            {
+                _logger.LogWarning(oce, "Suggestions request canceled on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error generating suggestions (attempt {Attempt}/{MaxAttempts})", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+
+            var delaySeconds = (int)Math.Pow(2, attempt);
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating suggestions with LLM");
-            return new List<LLMSuggestion>();
-        }
+
+        return new List<LLMSuggestion>();
     }
 
     private string BuildSuggestionsPrompt(string fileContent, CleanCodeRating rating)
     {
         return $@"
-                Com base na análise de Clean Code abaixo, gere sugestões específicas para melhorar o código:
+                Gere entre 3 e 5 sugestões objetivas para melhorar o código abaixo, considerando as notas atuais de Clean Code.
+                Responda SOMENTE com um array JSON válido. Não inclua texto fora do JSON.
+                Cada item do array deve conter exatamente estas chaves: title, description, priority, type, difficulty, studyResources.
+                As prioridades permitidas: Low, Medium, High. O campo studyResources é uma lista de textos.
 
-                Notas atuais:
-                - Variable Naming: {rating.VariableNaming}/10
-                - Function Sizes: {rating.FunctionSizes}/10
-                - No Needs Comments: {rating.NoNeedsComments}/10
-                - Method Cohesion: {rating.MethodCohesion}/10
-                - Dead Code: {rating.DeadCode}/10
+                Índice de capítulos (Clean Code) para referência em studyResources:
+                1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
+                9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
+                16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
+                Ao sugerir recursos de estudo, retorne o(s) capítulo(s) pertinente(s) por nome, por exemplo: ""Capítulo 2 - Nomes significativos"".
+
+                Notas atuais (1-10):
+                - Variable Naming: {rating.VariableNaming}
+                - Function Sizes: {rating.FunctionSizes}
+                - No Needs Comments: {rating.NoNeedsComments}
+                - Method Cohesion: {rating.MethodCohesion}
+                - Dead Code: {rating.DeadCode}
 
                 Código:
                 {fileContent}
 
-                Gere 3-5 sugestões específicas em JSON:
+                Exemplo de formato (apenas estrutura):
                 [
                   {{
                     ""title"": ""Melhorar nomenclatura de variáveis"",
-                    ""description"": ""Usar nomes mais descritivos para as variáveis x e y"",
+                    ""description"": ""Use nomes descritivos e consistentes para variáveis e parâmetros"",
                     ""priority"": ""Medium"",
                     ""type"": ""CodeStyle"",
                     ""difficulty"": ""Easy"",
-                    ""studyResources"": [""Clean Code - Chapter 2""]
+                    ""studyResources"": [""Capítulo 2 - Nomes significativos""]
                   }}
                 ]";
     }
@@ -95,18 +138,21 @@ public class OllamaIllmService : ILLMService
     private string BuildAnalysisPrompt(string fileContent)
     {
         return $@"
-            Analise o seguinte código e avalie estritamente de 1 a 10 os seguintes critérios de Clean Code:
+            Avalie o código abaixo como um analista sênior de Clean Code.
+            Atribua notas inteiras de 1 a 10 para as chaves: variableScore, functionScore, commentScore, cohesionScore, deadCodeScore.
+            Inclua um objeto justifications com justificativas textuais por critério usando EXATAMENTE as chaves: VariableNaming, FunctionSizes, NoNeedsComments, MethodCohesion, DeadCode.
+            Responda SOMENTE com um JSON válido contendo exatamente estas chaves no objeto raiz.
+            Se não tiver confiança para alguma nota, escolha o valor inteiro mais apropriado entre 1 e 10.
 
-            1. Variable Naming (nomenclatura de variáveis)
-            2. Function Sizes (tamanho das funções)
-            3. No Needs Comments (código auto-explicativo)
-            4. Method Cohesion (coesão dos métodos)
-            5. Dead Code (código morto)
+            Índice de capítulos (Clean Code) para referência futura:
+            1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
+            9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
+            16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
 
             Código:
             {fileContent}
 
-            Responda em JSON no formato (não altere o formato, precisa ser um json com exatamente estas chaves):
+            Exemplo de formato (apenas estrutura):
             {{
               ""variableScore"": 8,
               ""functionScore"": 7,
@@ -114,13 +160,19 @@ public class OllamaIllmService : ILLMService
               ""cohesionScore"": 8,
               ""deadCodeScore"": 10,
               ""justifications"": {{
-                ""VariableNaming"": ""Nomes descritivos e claros"",
-                ""FunctionSizes"": ""Funções pequenas e focadas""
+                ""Variable"": ""Justificativa para nota"",
+                ""Functions"": ""Justificativa para nota"",
+                ""Comments"": ""Justificativa para nota"",
+                ""Cohesion"": ""Justificativa para nota"",
+                ""DeadCode"": ""Justificativa para nota""
               }}
             }}
 
-             ""IMPORTANTE: Todos os scores devem ser números inteiros entre 1 e 10. NÃO use porcentagens, NÃO use números maiores que 10.
-            ";  }
+            Regras obrigatórias:
+            - Use somente números inteiros de 1 a 10.
+            - Não inclua texto fora do JSON.
+            - As chaves de justifications DEVEM ser exatamente as cinco acima.";
+    }
 
     private async Task<string> CallOllamaAsync(string prompt)
     {
@@ -130,6 +182,8 @@ public class OllamaIllmService : ILLMService
         {
             model,
             prompt,
+            format = "json",
+            options = new {temperature = 0.2},
             stream = false
         };
 
@@ -209,6 +263,7 @@ public class OllamaIllmService : ILLMService
 
             if (jsonStart == -1 || jsonEnd == -1)
             {
+                _logger.LogWarning("Extracting JSON from LLM response: {Response}", response);
                 _logger.LogWarning("No JSON found in LLM response");
                 return "{}";
             }
@@ -386,6 +441,8 @@ public class OllamaIllmService : ILLMService
             {
                 _logger.LogError(ex, "Error during LLM suggestions JSON correction attempt {Attempt}", attempt);
             }
+            
+            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
         }
         
         _logger.LogError("Failed to correct suggestions JSON after {MaxRetries} attempts with LLM", maxRetries);
@@ -466,13 +523,33 @@ public class OllamaIllmService : ILLMService
                 _logger.LogDebug("Using root object directly");
             }
 
+            int GetIntOrDefault(JsonElement el, string name, int def)
+            {
+                if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var p))
+                {
+                    if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v))
+                        return ClampScore(v);
+                    // casos de string numérica
+                    if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var vs))
+                        return ClampScore(vs);
+                }
+                _logger.LogWarning("Missing or invalid '{Name}' in analysis JSON. Using default.", name);
+                return def;
+            }
+
+            var variableScore = GetIntOrDefault(scoreElement, "variableScore", 5);
+            var functionScore = GetIntOrDefault(scoreElement, "functionScore", 5);
+            var commentScore = GetIntOrDefault(scoreElement, "commentScore", 5);
+            var cohesionScore = GetIntOrDefault(scoreElement, "cohesionScore", 5);
+            var deadCodeScore = GetIntOrDefault(scoreElement, "deadCodeScore", 5);
+
             result = new LLMAnalysisResult
             {
-                VariableScore = ClampScore(scoreElement.GetProperty("variableScore").GetInt32()),
-                FunctionScore = ClampScore(scoreElement.GetProperty("functionScore").GetInt32()),
-                CommentScore = ClampScore(scoreElement.GetProperty("commentScore").GetInt32()),
-                CohesionScore = ClampScore(scoreElement.GetProperty("cohesionScore").GetInt32()),
-                DeadCodeScore = ClampScore(scoreElement.GetProperty("deadCodeScore").GetInt32())
+                VariableScore = variableScore,
+                FunctionScore = functionScore,
+                CommentScore = commentScore,
+                CohesionScore = cohesionScore,
+                DeadCodeScore = deadCodeScore
             };
 
             if (scoreElement.TryGetProperty("justifications", out var justifications))
@@ -482,9 +559,19 @@ public class OllamaIllmService : ILLMService
                     result.Justifications[prop.Name] = prop.Value.GetString() ?? "";
                 }
             }
+            // Ensure all five justification keys exist for consistent downstream usage
+            var requiredKeys = new[] { "VariableNaming", "FunctionSizes", "NoNeedsComments", "MethodCohesion", "DeadCode" };
+            foreach (var key in requiredKeys)
+            {
+                if (!result.Justifications.ContainsKey(key))
+                {
+                    result.Justifications[key] = "Justificativa não fornecida";
+                    _logger.LogWarning("Missing justification '{Key}' in analysis JSON. Filled with default.", key);
+                }
+            }
 
-            _logger.LogInformation("Successfully parsed analysis: Variable={Variable}, Function={Function}, Comment={Comment}", 
-                result.VariableScore, result.FunctionScore, result.CommentScore);
+            _logger.LogInformation("Successfully parsed analysis: Variable={Variable}, Function={Function}, Comment={Comment}, Cohesion={Cohesion}, DeadCode={DeadCode}", 
+                result.VariableScore, result.FunctionScore, result.CommentScore, result.CohesionScore, result.DeadCodeScore);
 
             return true;
         }
@@ -509,7 +596,7 @@ public class OllamaIllmService : ILLMService
         }
         if (score > 10)
         {
-            _logger.LogWarning("Score {Score} is above maximum (10), clamping to 10", score);
+            _logger.LogWarning("Score {Score} is above maximum (10), dividing by 10", score);
             score /= 10;
             
             if (score < 1)
@@ -520,7 +607,7 @@ public class OllamaIllmService : ILLMService
 
             if (score > 10)
             {
-                _logger.LogWarning("Score {Score} is above maximum (10) after clamping, clamping to 10", score);
+                _logger.LogWarning("Score {Score} is above maximum (10) after dividing, clamping to 10", score);
                 score = 10;
             }
         }

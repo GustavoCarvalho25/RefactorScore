@@ -191,14 +191,14 @@ public class CommitAnalysisRepositoryIntegrationTests : IntegrationTestBase
     public async Task MongoDbMapping_WithComplexValueObjects_ShouldSerializeAndDeserializeCorrectly()
     {
         // Arrange
-        var justifies = new Dictionary<string, string>
+        var justifications = new Dictionary<string, string>
         {
             { "VariableNaming", "Good variable names throughout the code" },
             { "FunctionSizes", "Functions are appropriately sized" },
             { "Comments", "Code is self-documenting" }
         };
         
-        var rating = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
+        var rating = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
         var studyResources = new List<string> { "Clean Code Book", "SOLID Principles", "Refactoring Guide" };
         var suggestion = new Suggestion(
             "Improve Variable Naming",
@@ -228,8 +228,8 @@ public class CommitAnalysisRepositoryIntegrationTests : IntegrationTestBase
         retrievedFile.Rating.DeadCode.Should().Be(5);
         retrievedFile.Rating.Note.Should().Be(7.0);
         retrievedFile.Rating.Quality.Should().Be("Good");
-        retrievedFile.Rating.Justifies.Should().HaveCount(3);
-        retrievedFile.Rating.Justifies["VariableNaming"].Should().Be("Good variable names throughout the code");
+        retrievedFile.Rating.Justifications.Should().HaveCount(3);
+        retrievedFile.Rating.Justifications["VariableNaming"].Should().Be("Good variable names throughout the code");
 
         // Assert
         var retrievedSuggestion = retrieved.Suggestions.First();
