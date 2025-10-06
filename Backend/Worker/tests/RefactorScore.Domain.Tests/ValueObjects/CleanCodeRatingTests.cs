@@ -19,27 +19,27 @@ public class CleanCodeRatingTests
         rating.NoNeedsComments.Should().Be(9);
         rating.MethodCohesion.Should().Be(6);
         rating.DeadCode.Should().Be(5);
-        rating.Justifies.Should().NotBeNull();
-        rating.Justifies.Should().BeEmpty();
+        rating.Justifications.Should().NotBeNull();
+        rating.Justifications.Should().BeEmpty();
     }
 
     [Fact]
-    public void Constructor_WithJustifies_ShouldCreateInstanceWithJustifies()
+    public void Constructor_Withjustifications_ShouldCreateInstanceWithjustifications()
     {
         // Arrange
-        var justifies = new Dictionary<string, string>
+        var justifications = new Dictionary<string, string>
         {
             { "VariableNaming", "Good variable names used" },
             { "FunctionSizes", "Functions are appropriately sized" }
         };
 
         // Act
-        var rating = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
+        var rating = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
 
         // Assert
-        rating.Justifies.Should().HaveCount(2);
-        rating.Justifies["VariableNaming"].Should().Be("Good variable names used");
-        rating.Justifies["FunctionSizes"].Should().Be("Functions are appropriately sized");
+        rating.Justifications.Should().HaveCount(2);
+        rating.Justifications["VariableNaming"].Should().Be("Good variable names used");
+        rating.Justifications["FunctionSizes"].Should().Be("Functions are appropriately sized");
     }
 
     [Theory]
@@ -134,14 +134,14 @@ public class CleanCodeRatingTests
     public void Equals_WithSameValues_ShouldReturnTrue()
     {
         // Arrange
-        var justifies = new Dictionary<string, string>
+        var justifications = new Dictionary<string, string>
         {
             { "VariableNaming", "Good naming" },
             { "FunctionSizes", "Appropriate sizes" }
         };
 
-        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
-        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
+        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
+        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
 
         // Act & Assert
         rating1.Should().Be(rating2);
@@ -150,23 +150,23 @@ public class CleanCodeRatingTests
     }
 
     [Fact]
-    public void Equals_WithSameValuesButDifferentJustifiesOrder_ShouldReturnTrue()
+    public void Equals_WithSameValuesButDifferentJustificationsOrder_ShouldReturnTrue()
     {
         // Arrange
-        var justifies1 = new Dictionary<string, string>
+        var justifications1 = new Dictionary<string, string>
         {
             { "VariableNaming", "Good naming" },
             { "FunctionSizes", "Appropriate sizes" }
         };
 
-        var justifies2 = new Dictionary<string, string>
+        var justifications2 = new Dictionary<string, string>
         {
             { "FunctionSizes", "Appropriate sizes" },
             { "VariableNaming", "Good naming" }
         };
 
-        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifies1);
-        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifies2);
+        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifications1);
+        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifications2);
 
         // Act & Assert
         rating1.Should().Be(rating2);
@@ -189,21 +189,21 @@ public class CleanCodeRatingTests
     }
 
     [Fact]
-    public void Equals_WithDifferentJustifies_ShouldReturnFalse()
+    public void Equals_WithDifferentJustifications_ShouldReturnFalse()
     {
         // Arrange
-        var justifies1 = new Dictionary<string, string>
+        var justifications1 = new Dictionary<string, string>
         {
             { "VariableNaming", "Good naming" }
         };
 
-        var justifies2 = new Dictionary<string, string>
+        var justifications2 = new Dictionary<string, string>
         {
             { "VariableNaming", "Different naming" }
         };
 
-        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifies1);
-        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifies2);
+        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifications1);
+        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifications2);
 
         // Act & Assert
         rating1.Should().NotBe(rating2);
@@ -215,13 +215,13 @@ public class CleanCodeRatingTests
     public void GetHashCode_WithSameValues_ShouldReturnSameHashCode()
     {
         // Arrange
-        var justifies = new Dictionary<string, string>
+        var justifications = new Dictionary<string, string>
         {
             { "VariableNaming", "Good naming" }
         };
 
-        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
-        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifies);
+        var rating1 = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
+        var rating2 = new CleanCodeRating(8, 7, 9, 6, 5, justifications);
 
         // Act & Assert
         rating1.GetHashCode().Should().Be(rating2.GetHashCode());
@@ -239,14 +239,14 @@ public class CleanCodeRatingTests
     }
 
     [Fact]
-    public void Constructor_WithNullJustifies_ShouldCreateEmptyDictionary()
+    public void Constructor_WithNullJustifications_ShouldCreateEmptyDictionary()
     {
         // Arrange & Act
         var rating = new CleanCodeRating(8, 7, 9, 6, 5, null);
 
         // Assert
-        rating.Justifies.Should().NotBeNull();
-        rating.Justifies.Should().BeEmpty();
+        rating.Justifications.Should().NotBeNull();
+        rating.Justifications.Should().BeEmpty();
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public class CleanCodeRatingTests
             .WithNoNeedsComments(9)
             .WithMethodCohesion(6)
             .WithDeadCode(5)
-            .WithJustifies(new Dictionary<string, string> { { "Test", "Value" } })
+            .WithJustifications(new Dictionary<string, string> { { "Test", "Value" } })
             .Build();
 
         // Assert
@@ -268,7 +268,7 @@ public class CleanCodeRatingTests
         rating.NoNeedsComments.Should().Be(9);
         rating.MethodCohesion.Should().Be(6);
         rating.DeadCode.Should().Be(5);
-        rating.Justifies.Should().ContainKey("Test");
+        rating.Justifications.Should().ContainKey("Test");
         rating.Note.Should().Be(7.0);
         rating.Quality.Should().Be("Good");
     }

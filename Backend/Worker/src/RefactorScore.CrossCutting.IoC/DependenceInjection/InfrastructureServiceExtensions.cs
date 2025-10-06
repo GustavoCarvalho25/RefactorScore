@@ -42,16 +42,24 @@ public static class InfrastructureServiceExtensions
         
         services.AddSingleton<GitMapper>();
         
-        services.AddHttpClient();
         
         services.Configure<OllamaSettings>(configuration.GetSection("Ollama"));
         
+        services.AddHttpClient("Ollama", (sp, client) =>
+        {
+            var settings = sp.GetRequiredService<IOptions<OllamaSettings>>().Value;
+            client.Timeout = Timeout.InfiniteTimeSpan;
+            if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
+                client.BaseAddress = new Uri(settings.BaseUrl);
+        });
         services.AddSingleton<ILLMService>(sp =>
         {
-            var httpClient = sp.GetRequiredService<HttpClient>();
+            var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpFactory.CreateClient("Ollama");
             var logger = sp.GetRequiredService<ILogger<OllamaIllmService>>();
-            var ollamaSettings = sp.GetRequiredService<IOptions<OllamaSettings>>();
-            return new OllamaIllmService(logger, httpClient, configuration, ollamaSettings);
+            var config = sp.GetRequiredService<IConfiguration>();
+            var ollamaOptions = sp.GetRequiredService<IOptions<OllamaSettings>>();
+            return new OllamaIllmService(logger, httpClient, config, ollamaOptions);
         });
 
         return services;

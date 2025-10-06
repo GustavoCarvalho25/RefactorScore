@@ -26,7 +26,6 @@ public class Suggestion : ValueObject
         List<string> studyResources = null
         )
     {
-        // Validações usando Ardalis.GuardClauses
         Guard.Against.NullOrWhiteSpace(title, nameof(title));
         Guard.Against.NullOrWhiteSpace(description, nameof(description));
         Guard.Against.NullOrWhiteSpace(priority, nameof(priority));
@@ -34,7 +33,6 @@ public class Suggestion : ValueObject
         Guard.Against.NullOrWhiteSpace(difficult, nameof(difficult));
         Guard.Against.NullOrWhiteSpace(fileReference, nameof(fileReference));
         
-        // Validação de data
         if (lastUpdate > DateTime.UtcNow)
             throw new ArgumentException("LastUpdate cannot be in the future", nameof(lastUpdate));
         
@@ -58,13 +56,11 @@ public class Suggestion : ValueObject
         yield return FileReference;
         yield return LastUpdate;
         
-        // Para coleções, precisamos retornar cada item individualmente
         foreach (var resource in StudyResources)
         {
             yield return resource;
         }
         
-        // Também incluir o count para garantir que listas de tamanhos diferentes sejam diferentes
         yield return StudyResources.Count;
     }
 }
