@@ -5,6 +5,7 @@ using RefactorScore.Domain.Models;
 using RefactorScore.Domain.Repositories;
 using RefactorScore.Domain.Services;
 using RefactorScore.Domain.ValueObjects;
+using RefactorScore.Domain.Enum;
 
 namespace RefactorScore.Application.Services;
 
@@ -56,6 +57,17 @@ public class CommitAnalysisService : ICommitAnalysisService
 
         foreach (var file in filesChanges.Where(c => c.IsSourceCode))
         {
+            if (file.ChangeType == FileChangeType.Deleted)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(file.Content))
+            {
+                _logger.LogWarning("Skipping file with empty content: {Path} (ChangeType={ChangeType})", file.Path, file.ChangeType);
+                continue;
+            }
+
             var commitFile = new CommitFile(
                 file.Path,
                 file.AddedLines,
@@ -100,13 +112,42 @@ public class CommitAnalysisService : ICommitAnalysisService
 
     private string DetermineOverallLanguage(List<FileChange> filesChanges)
     {
-        if (!filesChanges.Any()) return "Unknown";
+        if (filesChanges == null || filesChanges.Count == 0)
+        {
+            _logger.LogWarning("DetermineOverallLanguage: No files in change set. Returning 'Unknown'.");
+            return "Unknown";
+        }
         
-        var languageCounts = filesChanges
-            .Where(f => f.IsSourceCode)
+        var source = filesChanges
+            .Where(f => f.IsSourceCode && f.ChangeType != FileChangeType.Deleted)
+            .ToList();
+        
+        if (!source.Any())
+        {
+            var total = filesChanges.Count;
+            var nonSource = filesChanges.Count(f => !f.IsSourceCode);
+            var deleted = filesChanges.Count(f => f.ChangeType == FileChangeType.Deleted);
+            _logger.LogWarning(
+                "DetermineOverallLanguage: No source-code files (non-deleted) found. total={Total}, nonSource={NonSource}, deleted={Deleted}. Returning 'Unknown'.",
+                total, nonSource, deleted);
+        }
+
+        var language = source
             .GroupBy(f => f.Language)
-            .ToDictionary(g => g.Key, g => g.Count());
-        
-        return languageCounts.OrderByDescending(kv => kv.Value).First().Key;
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault()
+            ?.Key;
+
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            var total = filesChanges.Count;
+            var sourceCount = source.Count;
+            _logger.LogWarning(
+                "DetermineOverallLanguage: Could not infer language (empty result). total={Total}, source={Source}. Returning 'Unknown'.",
+                total, sourceCount);
+            return "Unknown";
+        }
+
+        return language;
     }
 }
