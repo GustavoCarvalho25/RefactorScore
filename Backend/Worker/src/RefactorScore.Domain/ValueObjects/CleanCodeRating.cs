@@ -14,7 +14,7 @@ public class CleanCodeRating : ValueObject
 
     public double Note => CalculateNote();
     
-    public Dictionary<string, string> Justifies { get; private set; }
+    public Dictionary<string, string> Justifications { get; private set; }
     
     private double CalculateNote()
         => (VariableNaming + FunctionSizes + NoNeedsComments + MethodCohesion + DeadCode) / 5.0;
@@ -35,7 +35,7 @@ public class CleanCodeRating : ValueObject
         }
     }
     
-    public CleanCodeRating(int variableNaming, int functionSizes, int noNeedsComments, int methodCohesion, int deadCode, Dictionary<string, string> justifies = null)
+    public CleanCodeRating(int variableNaming, int functionSizes, int noNeedsComments, int methodCohesion, int deadCode, Dictionary<string, string> justifications = null)
     {
         Guard.Against.NegativeOrZero(variableNaming, nameof(variableNaming));
         Guard.Against.NegativeOrZero(functionSizes, nameof(functionSizes));
@@ -54,12 +54,12 @@ public class CleanCodeRating : ValueObject
         NoNeedsComments = noNeedsComments;
         MethodCohesion = methodCohesion;
         DeadCode = deadCode;
-        Justifies = (justifies ?? new Dictionary<string, string>());
+        Justifications = (justifications ?? new Dictionary<string, string>());
     }
 
     private CleanCodeRating()
     {
-        Justifies = new Dictionary<string, string>();
+        Justifications = new Dictionary<string, string>();
     }
     
     protected override IEnumerable<object> GetEqualityComponents()
@@ -70,12 +70,12 @@ public class CleanCodeRating : ValueObject
         yield return MethodCohesion;
         yield return DeadCode;
         
-        foreach (var kvp in Justifies.OrderBy(x => x.Key))
+        foreach (var kvp in Justifications.OrderBy(x => x.Key))
         {
             yield return kvp.Key;
             yield return kvp.Value;
         }
         
-        yield return Justifies.Count;
+        yield return Justifications.Count;
     }
 }

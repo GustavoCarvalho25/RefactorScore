@@ -11,7 +11,7 @@ public class CleanCodeRatingBuilder
     private int _noNeedsComments = 9;
     private int _methodCohesion = 8;
     private int _deadCode = 10;
-    private Dictionary<string, string> _justifies = new();
+    private Dictionary<string, string> _justifications = new();
 
     public static CleanCodeRatingBuilder Create() => new();
 
@@ -23,7 +23,7 @@ public class CleanCodeRatingBuilder
         _methodCohesion = _faker.Random.Int(1, 10);
         _deadCode = _faker.Random.Int(1, 10);
         
-        _justifies = new Dictionary<string, string>
+        _justifications = new Dictionary<string, string>
         {
             ["VariableNaming"] = _faker.Lorem.Sentence(),
             ["FunctionSizes"] = _faker.Lorem.Sentence(),
@@ -65,9 +65,9 @@ public class CleanCodeRatingBuilder
         return this;
     }
 
-    public CleanCodeRatingBuilder WithJustifies(Dictionary<string, string> justifies)
+    public CleanCodeRatingBuilder WithJustifications(Dictionary<string, string> justifications)
     {
-        _justifies = justifies;
+        _justifications = justifications;
         return this;
     }
 
@@ -79,7 +79,7 @@ public class CleanCodeRatingBuilder
         _methodCohesion = 10;
         _deadCode = 10;
         
-        _justifies = new Dictionary<string, string>
+        _justifications = new Dictionary<string, string>
         {
             ["VariableNaming"] = "Excellent variable naming throughout the code",
             ["FunctionSizes"] = "All functions are appropriately sized",
@@ -99,7 +99,7 @@ public class CleanCodeRatingBuilder
         _methodCohesion = 3;
         _deadCode = 5;
         
-        _justifies = new Dictionary<string, string>
+        _justifications = new Dictionary<string, string>
         {
             ["VariableNaming"] = "Variable names are not descriptive",
             ["FunctionSizes"] = "Functions are too long and complex",
@@ -119,7 +119,7 @@ public class CleanCodeRatingBuilder
             _noNeedsComments,
             _methodCohesion,
             _deadCode,
-            _justifies
+            _justifications
         );
     }
 }

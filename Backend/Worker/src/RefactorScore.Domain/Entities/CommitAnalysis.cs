@@ -40,7 +40,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
             (int)analyzedFiles.Average(f => f.Rating.DeadCode),
             analyzedFiles
                 .Where(f => f.HasAnalysis)
-                .SelectMany(f => f.Rating.Justifies)
+                .SelectMany(f => f.Rating.Justifications)
                 .GroupBy(kvp => kvp.Key)
                 .ToDictionary(g => g.Key, g => g.First().Value)
         );
