@@ -2,9 +2,11 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RefactorScore.Domain.Models;
 using RefactorScore.Domain.Services;
 using RefactorScore.Domain.ValueObjects;
+using RefactorScore.Infrastructure.Configurations;
 
 namespace RefactorScore.Application.Services;
 
@@ -14,13 +16,19 @@ public class OllamaIllmService : ILLMService
     private readonly ILogger<OllamaIllmService> _logger;
     private readonly string _ollamaUrl;
     private readonly IConfiguration _configuration;
+    private readonly OllamaSettings _ollamaSettings;
 
-    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, string ollamaUrl, IConfiguration configuration)
+    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, IConfiguration configuration, IOptions<OllamaSettings> ollamaOptions)
     {
-        _logger = logger;
-        _httpClient = httpClient;
-        _ollamaUrl = ollamaUrl;
-        _configuration = configuration;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+
+        if (ollamaOptions == null)
+            throw new ArgumentNullException(nameof(ollamaOptions));
+            
+        _ollamaSettings = ollamaOptions.Value ?? throw new ArgumentNullException(nameof(ollamaOptions.Value));
+        _ollamaUrl = _ollamaSettings.BaseUrl ?? throw new ArgumentNullException(nameof(_ollamaSettings.BaseUrl));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task<LLMAnalysisResult> AnalyzeFileAsync(string fileContent)
@@ -41,43 +49,93 @@ public class OllamaIllmService : ILLMService
 
     public async Task<List<LLMSuggestion>> GenerateSuggestionsAsync(string fileContent, CleanCodeRating rating)
     {
-        try
+        ArgumentNullException.ThrowIfNull(rating);
+
+        var prompt = BuildSuggestionsPrompt(fileContent, rating);
+
+        const int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var prompt = BuildSuggestionsPrompt(fileContent, rating);
-            var response = await CallOllamaAsync(prompt);
-            return await ParseSuggestionsResponse(response);
+            try
+            {
+                if (attempt > 1)
+                {
+                    _logger.LogInformation("Retrying suggestions request (attempt {Attempt}/{MaxAttempts})", attempt, maxAttempts);
+                }
+
+                var response = await CallOllamaAsync(prompt);
+                return await ParseSuggestionsResponse(response);
+            }
+            catch (TimeoutException tex)
+            {
+                _logger.LogWarning(tex, "Suggestions request timed out on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (HttpRequestException hex)
+            {
+                _logger.LogWarning(hex, "HTTP error during suggestions on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (OperationCanceledException oce)
+            {
+                _logger.LogWarning(oce, "Suggestions request canceled on attempt {Attempt}/{MaxAttempts}", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error generating suggestions (attempt {Attempt}/{MaxAttempts})", attempt, maxAttempts);
+                if (attempt == maxAttempts)
+                    break;
+            }
+
+            var delaySeconds = (int)Math.Pow(2, attempt);
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error generating suggestions with LLM");
-            return new List<LLMSuggestion>();
-        }
+
+        return new List<LLMSuggestion>();
     }
 
     private string BuildSuggestionsPrompt(string fileContent, CleanCodeRating rating)
     {
         return $@"
-                Com base na análise de Clean Code abaixo, gere sugestões específicas para melhorar o código:
+                Gere entre 3 e 5 sugestões objetivas para melhorar o código abaixo, considerando as notas atuais de Clean Code.
+                Responda SOMENTE com um array JSON válido. Não inclua texto fora do JSON.
+                Cada item do array deve conter exatamente estas chaves: title, description, priority, type, difficulty, studyResources.
+                Regras obrigatórias:
+                - priority deve ser UM de: Low, Medium, High.
+                - difficulty deve ser UM de: Easy, Medium, Hard.
+                - type deve ser UM de: CodeStyle, Naming, Structure, Documentation, Testing, ErrorHandling, Performance, Refactoring, Cohesion, DeadCode.
+                - Retorne entre 3 e 5 itens no array.
+                - studyResources é uma lista de textos.
 
-                Notas atuais:
-                - Variable Naming: {rating.VariableNaming}/10
-                - Function Sizes: {rating.FunctionSizes}/10
-                - No Needs Comments: {rating.NoNeedsComments}/10
-                - Method Cohesion: {rating.MethodCohesion}/10
-                - Dead Code: {rating.DeadCode}/10
+                Índice de capítulos (Clean Code) para referência em studyResources:
+                1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
+                9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
+                16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
+                Ao sugerir recursos de estudo, retorne o(s) capítulo(s) pertinente(s) por nome, por exemplo: ""Capítulo 2 - Nomes significativos"".
+
+                Notas atuais (1-10):
+                - Variable Naming: {rating.VariableNaming}
+                - Function Sizes: {rating.FunctionSizes}
+                - No Needs Comments: {rating.NoNeedsComments}
+                - Method Cohesion: {rating.MethodCohesion}
+                - Dead Code: {rating.DeadCode}
 
                 Código:
                 {fileContent}
 
-                Gere 3-5 sugestões específicas em JSON:
+                Exemplo de formato (apenas estrutura):
                 [
                   {{
                     ""title"": ""Melhorar nomenclatura de variáveis"",
-                    ""description"": ""Usar nomes mais descritivos para as variáveis x e y"",
+                    ""description"": ""Use nomes descritivos e consistentes para variáveis e parâmetros"",
                     ""priority"": ""Medium"",
-                    ""type"": ""CodeStyle"",
+                    ""type"": ""Naming"",
                     ""difficulty"": ""Easy"",
-                    ""studyResources"": [""Clean Code - Chapter 2""]
+                    ""studyResources"": [""Capítulo 2 - Nomes significativos""]
                   }}
                 ]";
     }
@@ -86,67 +144,109 @@ public class OllamaIllmService : ILLMService
     private string BuildAnalysisPrompt(string fileContent)
     {
         return $@"
-            Analise o seguinte código e avalie de 1 a 10 os seguintes critérios de Clean Code:
+            Avalie o código abaixo como um analista sênior de Clean Code.
+            Atribua notas inteiras de 1 a 10 para as chaves: variableScore, functionScore, commentScore, cohesionScore, deadCodeScore.
+            Inclua um objeto justifications com justificativas textuais por critério usando EXATAMENTE as chaves: VariableNaming, FunctionSizes, NoNeedsComments, MethodCohesion, DeadCode.
+            Responda SOMENTE com um JSON válido contendo exatamente estas chaves no objeto raiz.
+            Se não tiver confiança para alguma nota, escolha o valor inteiro mais apropriado entre 1 e 10.
 
-            1. Variable Naming (nomenclatura de variáveis)
-            2. Function Sizes (tamanho das funções)
-            3. No Needs Comments (código auto-explicativo)
-            4. Method Cohesion (coesão dos métodos)
-            5. Dead Code (código morto)
+            Regras das justificativas (obrigatório):
+            - Devem ser específicas e baseadas no código fornecido, em português claro.
+            - Proibido usar frases genéricas como: ""Justificativa para nota"", ""Genérico"", ""N/A"", ""Sem detalhes"".
+            - Cada justificativa deve referenciar pelo menos 2 elementos concretos (ex.: nomes de funções/métodos/variáveis, estruturas como if/for/linq) e, quando possível, citar o capítulo pertinente.
+            - Tamanho recomendado entre 10 e 35 palavras por justificativa (curta e objetiva).
+            - NÃO COPIE o exemplo abaixo; gere justificativas originais com base no código fornecido.
+
+            Índice de capítulos (Clean Code) para referência futura:
+            1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
+            9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
+            16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
 
             Código:
             {fileContent}
 
-            Responda em JSON no formato (não altere o formato, precisa ser um json com exatamente estas chaves):
+            RESPONDER SOMENTE com um JSON válido nessa estrutura (use exatamente estes nomes de chave em seus respectivos cases), com as notas e justificativas coerentes ao código fornecido e seguindo TODAS as regras:
             {{
-              ""variableScore"": 8,
-              ""functionScore"": 7,
-              ""commentScore"": 9,
-              ""cohesionScore"": 8,
-              ""deadCodeScore"": 10,
+              ""variableScore"": número,
+              ""functionScore"": número,
+              ""commentScore"": número,
+              ""cohesionScore"": número,
+              ""deadCodeScore"": número,
               ""justifications"": {{
-                ""VariableNaming"": ""Nomes descritivos e claros"",
-                ""FunctionSizes"": ""Funções pequenas e focadas""
+                ""VariableNaming"": ""texto"",
+                ""FunctionSizes"": ""texto"",
+                ""NoNeedsComments"": ""texto"",
+                ""MethodCohesion"": ""texto"",
+                ""DeadCode"": ""texto""
               }}
-            }}";
+            }}
+
+            Regras obrigatórias:
+            - Use somente números inteiros de 1 a 10.
+            - As justificativas DEVEM ter entre 10 e 35 palavras.
+            - As justificativas DEVEM ser específicas e baseadas no código fornecido.
+            - Não inclua texto fora do JSON.
+            - As chaves de justifications DEVEM ser exatamente as cinco acima.";
     }
 
     private async Task<string> CallOllamaAsync(string prompt)
     {
-        var model = _configuration["Ollama:Model"];
+        var timeoutSeconds = _ollamaSettings.AnalysisTimeoutSeconds;
+        var model = _ollamaSettings.Model;
         var request = new
         {
             model,
             prompt,
+            format = "json",
+            options = new {temperature = 0.2},
             stream = false
         };
 
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content);
-        response.EnsureSuccessStatusCode();
-
-        var responseContent = await response.Content.ReadAsStringAsync();
         
-        using var doc = JsonDocument.Parse(responseContent);
-        var root = doc.RootElement;
+        using var cts = new CancellationTokenSource();
 
-        if (!root.TryGetProperty("response", out var responseProperty))
+        if (timeoutSeconds > 0)
         {
-            _logger.LogWarning("No 'response' property found in LLM response, using default values");
-            throw new InvalidOperationException("No 'response' property found in LLM response");
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            
+            if (_ollamaSettings.EnableDetailedLogging)
+                _logger.LogInformation("HttpClient timeout configured to {TimeoutSeconds} seconds", timeoutSeconds);
         }
-        
-        var llmResponse = responseProperty.GetString();
-        
-        if (string.IsNullOrEmpty(llmResponse))
+
+        try
         {
-            _logger.LogWarning("Empty LLM response, using default values");
-            throw new InvalidOperationException("Empty LLM response");;
-        }
+            var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
         
-        return llmResponse;
+            using var doc = JsonDocument.Parse(responseContent);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("response", out var responseProperty))
+            {
+                _logger.LogWarning("No 'response' property found in LLM response, using default values");
+                throw new InvalidOperationException("No 'response' property found in LLM response");
+            }
+        
+            var llmResponse = responseProperty.GetString();
+        
+            if (string.IsNullOrEmpty(llmResponse))
+            {
+                _logger.LogWarning("Empty LLM response, using default values");
+                throw new InvalidOperationException("Empty LLM response");
+            }
+        
+            return llmResponse;
+        }
+        catch (OperationCanceledException) when (cts.Token.IsCancellationRequested)
+        {
+            var usedTimeout = timeoutSeconds > 0 ? timeoutSeconds : _ollamaSettings.TimeoutSeconds;
+            _logger.LogWarning("LLM request timed out after {TimeoutSeconds} seconds", usedTimeout);
+            throw new TimeoutException($"LLM request timed out after {usedTimeout} seconds");
+        }
     }
 
     private async Task<LLMAnalysisResult> ParseAnalysisResponse(string response)
@@ -178,6 +278,7 @@ public class OllamaIllmService : ILLMService
 
             if (jsonStart == -1 || jsonEnd == -1)
             {
+                _logger.LogWarning("Extracting JSON from LLM response: {Response}", response);
                 _logger.LogWarning("No JSON found in LLM response");
                 return "{}";
             }
@@ -282,17 +383,99 @@ public class OllamaIllmService : ILLMService
             
             suggestions = JsonSerializer.Deserialize<List<LLMSuggestion>>(jsonContent, options);
             
-            if (suggestions == null || !suggestions.Any())
+            if (suggestions == null)
             {
                 _logger.LogWarning("Deserialized suggestions list is null or empty");
                 return false;
             }
             
+            if (!suggestions.Any())
+            {
+                _logger.LogInformation("Successfully parsed empty suggestions list");
+                return true;
+            }
+
+            string NormalizePriority(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Medium";
+                var val = v.Trim().ToLowerInvariant();
+                return val switch
+                {
+                    "low" => "Low",
+                    "medium" => "Medium",
+                    "med" => "Medium",
+                    "high" => "High",
+                    _ => "Medium"
+                };
+            }
+
+            string NormalizeDifficulty(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Medium";
+                var val = v.Trim().ToLowerInvariant();
+                return val switch
+                {
+                    "easy" => "Easy",
+                    "medium" => "Medium",
+                    "med" => "Medium",
+                    "hard" => "Hard",
+                    _ => "Medium"
+                };
+            }
+
+            string NormalizeType(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Refactoring";
+                var val = v.Trim().ToLowerInvariant().Replace(" ", "").Replace("_", "").Replace("-", "");
+                return val switch
+                {
+                    "codestyle" => "CodeStyle",
+                    "naming" => "Naming",
+                    "structure" => "Structure",
+                    "documentation" => "Documentation",
+                    "testing" => "Testing",
+                    "errorhandling" => "ErrorHandling",
+                    "performance" => "Performance",
+                    "refactoring" => "Refactoring",
+                    "cohesion" => "Cohesion",
+                    "deadcode" => "DeadCode",
+                    _ => "Refactoring"
+                };
+            }
+
+            string[] ChapterForType(string type)
+            {
+                return type switch
+                {
+                    "Naming" => new[] { "Capítulo 2 - Nomes significativos" },
+                    "Structure" => new[] { "Capítulo 3 - Funções", "Capítulo 11 - Sistemas" },
+                    "Documentation" => new[] { "Capítulo 4 - Comentários" },
+                    "Testing" => new[] { "Capítulo 9 - Testes de Unidade" },
+                    "ErrorHandling" => new[] { "Capítulo 7 - Tratamento de Erro" },
+                    "Performance" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    "Refactoring" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    "Cohesion" => new[] { "Capítulo 10 - Classes", "Capítulo 11 - Sistemas" },
+                    "DeadCode" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    _ => new[] { "Capítulo 1 - Código Limpo" }
+                };
+            }
+
+            foreach (var s in suggestions.Where(s => s != null))
+            {
+                s.Priority = NormalizePriority(s.Priority);
+                s.Difficulty = NormalizeDifficulty(s.Difficulty);
+                s.Type = NormalizeType(s.Type);
+                if (s.StudyResources == null)
+                    s.StudyResources = new List<string>();
+                if (s.StudyResources.Count == 0)
+                    s.StudyResources.AddRange(ChapterForType(s.Type));
+            }
+
             var validSuggestions = suggestions
-                .Where(s => !string.IsNullOrWhiteSpace(s.Title) && !string.IsNullOrWhiteSpace(s.Description))
+                .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Title) && !string.IsNullOrWhiteSpace(s.Description))
                 .Take(5)
                 .ToList();
-            
+
             suggestions = validSuggestions;
             _logger.LogInformation("Successfully parsed {Count} suggestions", validSuggestions.Count);
             return true;
@@ -348,6 +531,8 @@ public class OllamaIllmService : ILLMService
             {
                 _logger.LogError(ex, "Error during LLM suggestions JSON correction attempt {Attempt}", attempt);
             }
+            
+            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
         }
         
         _logger.LogError("Failed to correct suggestions JSON after {MaxRetries} attempts with LLM", maxRetries);
@@ -428,13 +613,33 @@ public class OllamaIllmService : ILLMService
                 _logger.LogDebug("Using root object directly");
             }
 
+            int GetIntOrDefault(JsonElement el, string name, int def)
+            {
+                if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var p))
+                {
+                    if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v))
+                        return ClampScore(v);
+                    
+                    if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var vs))
+                        return ClampScore(vs);
+                }
+                _logger.LogWarning("Missing or invalid '{Name}' in analysis JSON. Using default.", name);
+                return def;
+            }
+
+            var variableScore = GetIntOrDefault(scoreElement, "variableScore", 5);
+            var functionScore = GetIntOrDefault(scoreElement, "functionScore", 5);
+            var commentScore = GetIntOrDefault(scoreElement, "commentScore", 5);
+            var cohesionScore = GetIntOrDefault(scoreElement, "cohesionScore", 5);
+            var deadCodeScore = GetIntOrDefault(scoreElement, "deadCodeScore", 5);
+
             result = new LLMAnalysisResult
             {
-                VariableScore = scoreElement.GetProperty("variableScore").GetInt32(),
-                FunctionScore = scoreElement.GetProperty("functionScore").GetInt32(),
-                CommentScore = scoreElement.GetProperty("commentScore").GetInt32(),
-                CohesionScore = scoreElement.GetProperty("cohesionScore").GetInt32(),
-                DeadCodeScore = scoreElement.GetProperty("deadCodeScore").GetInt32()
+                VariableScore = variableScore,
+                FunctionScore = functionScore,
+                CommentScore = commentScore,
+                CohesionScore = cohesionScore,
+                DeadCodeScore = deadCodeScore
             };
 
             if (scoreElement.TryGetProperty("justifications", out var justifications))
@@ -444,9 +649,25 @@ public class OllamaIllmService : ILLMService
                     result.Justifications[prop.Name] = prop.Value.GetString() ?? "";
                 }
             }
+            else
+            {
+                // Log available keys to help diagnose schema mismatches
+                var keys = string.Join(", ", scoreElement.EnumerateObject().Select(p => p.Name));
+                _logger.LogWarning("'justifications' not found. Available root keys: {Keys}", keys);
+            }
+            
+            var requiredKeys = new[] { "VariableNaming", "FunctionSizes", "NoNeedsComments", "MethodCohesion", "DeadCode" };
+            foreach (var key in requiredKeys)
+            {
+                if (!result.Justifications.ContainsKey(key))
+                {
+                    result.Justifications[key] = "Justificativa não fornecida";
+                    _logger.LogWarning("Missing justification '{Key}' in analysis JSON. Filled with default.", key);
+                }
+            }
 
-            _logger.LogInformation("Successfully parsed analysis: Variable={Variable}, Function={Function}, Comment={Comment}", 
-                result.VariableScore, result.FunctionScore, result.CommentScore);
+            _logger.LogInformation("Successfully parsed analysis: Variable={Variable}, Function={Function}, Comment={Comment}, Cohesion={Cohesion}, DeadCode={DeadCode}", 
+                result.VariableScore, result.FunctionScore, result.CommentScore, result.CohesionScore, result.DeadCodeScore);
 
             return true;
         }
@@ -461,9 +682,38 @@ public class OllamaIllmService : ILLMService
             return false;
         }
     }
-
-    private async Task<string> FixJsonWithLlmAsync(string brokenJson, int maxRetries = 5)
+    
+    private int ClampScore(int score)
     {
+        if (score < 1)
+        {
+            _logger.LogWarning("Score {Score} is below minimum (1), clamping to 1", score);
+            return 1;
+        }
+        if (score > 10)
+        {
+            _logger.LogWarning("Score {Score} is above maximum (10), dividing by 10", score);
+            score /= 10;
+            
+            if (score < 1)
+            {
+                _logger.LogWarning("Score {Score} is below minimum (1) after clamping, clamping to 1", score);
+                return 1;
+            }
+
+            if (score > 10)
+            {
+                _logger.LogWarning("Score {Score} is above maximum (10) after dividing, clamping to 10", score);
+                score = 10;
+            }
+        }
+        return score;
+    }
+
+    private async Task<string> FixJsonWithLlmAsync(string brokenJson)
+    {
+        var maxRetries = _ollamaSettings.MaxJsonFixRetries;
+        
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
             try
@@ -517,14 +767,17 @@ public class OllamaIllmService : ILLMService
 
             Retorne APENAS o JSON corrigido, sem explicações adicionais. O JSON deve ter exatamente esta estrutura:
             {{
-              ""variableScore"": número,
-              ""functionScore"": número,
-              ""commentScore"": número,
-              ""cohesionScore"": número,
-              ""deadCodeScore"": número,
+              ""VariableScore"": número,
+              ""FunctionScore"": número,
+              ""CommentScore"": número,
+              ""CohesionScore"": número,
+              ""DeadCodeScore"": número,
               ""justifications"": {{
                 ""VariableNaming"": ""texto"",
-                ""FunctionSizes"": ""texto""
+                ""FunctionSizes"": ""texto"",
+                ""NoNeedsComments"": ""texto"",
+                ""MethodCohesion"": ""texto"",
+                ""DeadCode"": ""texto""
               }}
             }}";
     }

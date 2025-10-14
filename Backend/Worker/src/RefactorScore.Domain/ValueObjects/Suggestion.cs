@@ -1,4 +1,5 @@
 using RefactorScore.Domain.SeedWork;
+using Ardalis.GuardClauses;
 
 namespace RefactorScore.Domain.ValueObjects;
 
@@ -25,6 +26,16 @@ public class Suggestion : ValueObject
         List<string> studyResources = null
         )
     {
+        Guard.Against.NullOrWhiteSpace(title, nameof(title));
+        Guard.Against.NullOrWhiteSpace(description, nameof(description));
+        Guard.Against.NullOrWhiteSpace(priority, nameof(priority));
+        Guard.Against.NullOrWhiteSpace(type, nameof(type));
+        Guard.Against.NullOrWhiteSpace(difficult, nameof(difficult));
+        Guard.Against.NullOrWhiteSpace(fileReference, nameof(fileReference));
+        
+        if (lastUpdate > DateTime.UtcNow)
+            throw new ArgumentException("LastUpdate cannot be in the future", nameof(lastUpdate));
+        
         Title = title;
         Description = description;
         Priority = priority;
@@ -44,6 +55,12 @@ public class Suggestion : ValueObject
         yield return Difficult;
         yield return FileReference;
         yield return LastUpdate;
-        yield return StudyResources;
+        
+        foreach (var resource in StudyResources)
+        {
+            yield return resource;
+        }
+        
+        yield return StudyResources.Count;
     }
 }

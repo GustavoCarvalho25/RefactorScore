@@ -1,5 +1,6 @@
 using RefactorScore.Domain.Enum;
 using RefactorScore.Domain.SeedWork;
+using Ardalis.GuardClauses;
 
 namespace RefactorScore.Domain.ValueObjects;
 
@@ -13,7 +14,7 @@ public class CleanCodeRating : ValueObject
 
     public double Note => CalculateNote();
     
-    public Dictionary<string, string> Justifies { get; private set; }
+    public Dictionary<string, string> Justifications { get; private set; }
     
     private double CalculateNote()
         => (VariableNaming + FunctionSizes + NoNeedsComments + MethodCohesion + DeadCode) / 5.0;
@@ -34,19 +35,31 @@ public class CleanCodeRating : ValueObject
         }
     }
     
-    public CleanCodeRating(int variableNaming, int functionSizes, int noNeedsComments, int methodCohesion, int deadCode, Dictionary<string, string> justifies = null)
+    public CleanCodeRating(int variableNaming, int functionSizes, int noNeedsComments, int methodCohesion, int deadCode, Dictionary<string, string> justifications = null)
     {
+        Guard.Against.NegativeOrZero(variableNaming, nameof(variableNaming));
+        Guard.Against.NegativeOrZero(functionSizes, nameof(functionSizes));
+        Guard.Against.NegativeOrZero(noNeedsComments, nameof(noNeedsComments));
+        Guard.Against.NegativeOrZero(methodCohesion, nameof(methodCohesion));
+        Guard.Against.NegativeOrZero(deadCode, nameof(deadCode));
+        
+        Guard.Against.OutOfRange(variableNaming, nameof(variableNaming), 1, 10);
+        Guard.Against.OutOfRange(functionSizes, nameof(functionSizes), 1, 10);
+        Guard.Against.OutOfRange(noNeedsComments, nameof(noNeedsComments), 1, 10);
+        Guard.Against.OutOfRange(methodCohesion, nameof(methodCohesion), 1, 10);
+        Guard.Against.OutOfRange(deadCode, nameof(deadCode), 1, 10);
+        
         VariableNaming = variableNaming;
         FunctionSizes = functionSizes;
         NoNeedsComments = noNeedsComments;
         MethodCohesion = methodCohesion;
         DeadCode = deadCode;
-        Justifies = (justifies ?? new Dictionary<string, string>());
+        Justifications = (justifications ?? new Dictionary<string, string>());
     }
 
     private CleanCodeRating()
     {
-        Justifies = new Dictionary<string, string>();
+        Justifications = new Dictionary<string, string>();
     }
     
     protected override IEnumerable<object> GetEqualityComponents()
@@ -56,6 +69,13 @@ public class CleanCodeRating : ValueObject
         yield return NoNeedsComments;
         yield return MethodCohesion;
         yield return DeadCode;
-        yield return Justifies;
+        
+        foreach (var kvp in Justifications.OrderBy(x => x.Key))
+        {
+            yield return kvp.Key;
+            yield return kvp.Value;
+        }
+        
+        yield return Justifications.Count;
     }
 }
