@@ -103,7 +103,12 @@ public class OllamaIllmService : ILLMService
                 Gere entre 3 e 5 sugestões objetivas para melhorar o código abaixo, considerando as notas atuais de Clean Code.
                 Responda SOMENTE com um array JSON válido. Não inclua texto fora do JSON.
                 Cada item do array deve conter exatamente estas chaves: title, description, priority, type, difficulty, studyResources.
-                As prioridades permitidas: Low, Medium, High. O campo studyResources é uma lista de textos.
+                Regras obrigatórias:
+                - priority deve ser UM de: Low, Medium, High.
+                - difficulty deve ser UM de: Easy, Medium, Hard.
+                - type deve ser UM de: CodeStyle, Naming, Structure, Documentation, Testing, ErrorHandling, Performance, Refactoring, Cohesion, DeadCode.
+                - Retorne entre 3 e 5 itens no array.
+                - studyResources é uma lista de textos.
 
                 Índice de capítulos (Clean Code) para referência em studyResources:
                 1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
@@ -127,7 +132,7 @@ public class OllamaIllmService : ILLMService
                     ""title"": ""Melhorar nomenclatura de variáveis"",
                     ""description"": ""Use nomes descritivos e consistentes para variáveis e parâmetros"",
                     ""priority"": ""Medium"",
-                    ""type"": ""CodeStyle"",
+                    ""type"": ""Naming"",
                     ""difficulty"": ""Easy"",
                     ""studyResources"": [""Capítulo 2 - Nomes significativos""]
                   }}
@@ -144,6 +149,13 @@ public class OllamaIllmService : ILLMService
             Responda SOMENTE com um JSON válido contendo exatamente estas chaves no objeto raiz.
             Se não tiver confiança para alguma nota, escolha o valor inteiro mais apropriado entre 1 e 10.
 
+            Regras das justificativas (obrigatório):
+            - Devem ser específicas e baseadas no código fornecido, em português claro.
+            - Proibido usar frases genéricas como: ""Justificativa para nota"", ""Genérico"", ""N/A"", ""Sem detalhes"".
+            - Cada justificativa deve referenciar pelo menos 2 elementos concretos (ex.: nomes de funções/métodos/variáveis, estruturas como if/for/linq) e, quando possível, citar o capítulo pertinente.
+            - Tamanho recomendado entre 10 e 35 palavras por justificativa (curta e objetiva).
+            - NÃO COPIE o exemplo abaixo; gere justificativas originais com base no código fornecido.
+
             Índice de capítulos (Clean Code) para referência futura:
             1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
             9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
@@ -152,24 +164,26 @@ public class OllamaIllmService : ILLMService
             Código:
             {fileContent}
 
-            Exemplo de formato (apenas estrutura):
+            RESPONDER SOMENTE com um JSON válido nessa estrutura (use exatamente estes nomes de chave em seus respectivos cases), com as notas e justificativas coerentes ao código fornecido e seguindo TODAS as regras:
             {{
-              ""variableScore"": 8,
-              ""functionScore"": 7,
-              ""commentScore"": 9,
-              ""cohesionScore"": 8,
-              ""deadCodeScore"": 10,
+              ""variableScore"": número,
+              ""functionScore"": número,
+              ""commentScore"": número,
+              ""cohesionScore"": número,
+              ""deadCodeScore"": número,
               ""justifications"": {{
-                ""Variable"": ""Justificativa para nota"",
-                ""Functions"": ""Justificativa para nota"",
-                ""Comments"": ""Justificativa para nota"",
-                ""Cohesion"": ""Justificativa para nota"",
-                ""DeadCode"": ""Justificativa para nota""
+                ""VariableNaming"": ""texto"",
+                ""FunctionSizes"": ""texto"",
+                ""NoNeedsComments"": ""texto"",
+                ""MethodCohesion"": ""texto"",
+                ""DeadCode"": ""texto""
               }}
             }}
 
             Regras obrigatórias:
             - Use somente números inteiros de 1 a 10.
+            - As justificativas DEVEM ter entre 10 e 35 palavras.
+            - As justificativas DEVEM ser específicas e baseadas no código fornecido.
             - Não inclua texto fora do JSON.
             - As chaves de justifications DEVEM ser exatamente as cinco acima.";
     }
@@ -380,12 +394,87 @@ public class OllamaIllmService : ILLMService
                 return true;
             }
 
-            
+            string NormalizePriority(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Medium";
+                var val = v.Trim().ToLowerInvariant();
+                return val switch
+                {
+                    "low" => "Low",
+                    "medium" => "Medium",
+                    "med" => "Medium",
+                    "high" => "High",
+                    _ => "Medium"
+                };
+            }
+
+            string NormalizeDifficulty(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Medium";
+                var val = v.Trim().ToLowerInvariant();
+                return val switch
+                {
+                    "easy" => "Easy",
+                    "medium" => "Medium",
+                    "med" => "Medium",
+                    "hard" => "Hard",
+                    _ => "Medium"
+                };
+            }
+
+            string NormalizeType(string? v)
+            {
+                if (string.IsNullOrWhiteSpace(v)) return "Refactoring";
+                var val = v.Trim().ToLowerInvariant().Replace(" ", "").Replace("_", "").Replace("-", "");
+                return val switch
+                {
+                    "codestyle" => "CodeStyle",
+                    "naming" => "Naming",
+                    "structure" => "Structure",
+                    "documentation" => "Documentation",
+                    "testing" => "Testing",
+                    "errorhandling" => "ErrorHandling",
+                    "performance" => "Performance",
+                    "refactoring" => "Refactoring",
+                    "cohesion" => "Cohesion",
+                    "deadcode" => "DeadCode",
+                    _ => "Refactoring"
+                };
+            }
+
+            string[] ChapterForType(string type)
+            {
+                return type switch
+                {
+                    "Naming" => new[] { "Capítulo 2 - Nomes significativos" },
+                    "Structure" => new[] { "Capítulo 3 - Funções", "Capítulo 11 - Sistemas" },
+                    "Documentation" => new[] { "Capítulo 4 - Comentários" },
+                    "Testing" => new[] { "Capítulo 9 - Testes de Unidade" },
+                    "ErrorHandling" => new[] { "Capítulo 7 - Tratamento de Erro" },
+                    "Performance" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    "Refactoring" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    "Cohesion" => new[] { "Capítulo 10 - Classes", "Capítulo 11 - Sistemas" },
+                    "DeadCode" => new[] { "Capítulo 17 - Odores e Heurísticas" },
+                    _ => new[] { "Capítulo 1 - Código Limpo" }
+                };
+            }
+
+            foreach (var s in suggestions.Where(s => s != null))
+            {
+                s.Priority = NormalizePriority(s.Priority);
+                s.Difficulty = NormalizeDifficulty(s.Difficulty);
+                s.Type = NormalizeType(s.Type);
+                if (s.StudyResources == null)
+                    s.StudyResources = new List<string>();
+                if (s.StudyResources.Count == 0)
+                    s.StudyResources.AddRange(ChapterForType(s.Type));
+            }
+
             var validSuggestions = suggestions
-                .Where(s => !string.IsNullOrWhiteSpace(s.Title) && !string.IsNullOrWhiteSpace(s.Description))
+                .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Title) && !string.IsNullOrWhiteSpace(s.Description))
                 .Take(5)
                 .ToList();
-            
+
             suggestions = validSuggestions;
             _logger.LogInformation("Successfully parsed {Count} suggestions", validSuggestions.Count);
             return true;
@@ -529,7 +618,7 @@ public class OllamaIllmService : ILLMService
                 {
                     if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var v))
                         return ClampScore(v);
-                    // casos de string numérica
+                    
                     if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var vs))
                         return ClampScore(vs);
                 }
@@ -559,7 +648,13 @@ public class OllamaIllmService : ILLMService
                     result.Justifications[prop.Name] = prop.Value.GetString() ?? "";
                 }
             }
-            // Ensure all five justification keys exist for consistent downstream usage
+            else
+            {
+                // Log available keys to help diagnose schema mismatches
+                var keys = string.Join(", ", scoreElement.EnumerateObject().Select(p => p.Name));
+                _logger.LogWarning("'justifications' not found. Available root keys: {Keys}", keys);
+            }
+            
             var requiredKeys = new[] { "VariableNaming", "FunctionSizes", "NoNeedsComments", "MethodCohesion", "DeadCode" };
             foreach (var key in requiredKeys)
             {
@@ -671,14 +766,17 @@ public class OllamaIllmService : ILLMService
 
             Retorne APENAS o JSON corrigido, sem explicações adicionais. O JSON deve ter exatamente esta estrutura:
             {{
-              ""variableScore"": número,
-              ""functionScore"": número,
-              ""commentScore"": número,
-              ""cohesionScore"": número,
-              ""deadCodeScore"": número,
+              ""VariableScore"": número,
+              ""FunctionScore"": número,
+              ""CommentScore"": número,
+              ""CohesionScore"": número,
+              ""DeadCodeScore"": número,
               ""justifications"": {{
                 ""VariableNaming"": ""texto"",
-                ""FunctionSizes"": ""texto""
+                ""FunctionSizes"": ""texto"",
+                ""NoNeedsComments"": ""texto"",
+                ""MethodCohesion"": ""texto"",
+                ""DeadCode"": ""texto""
               }}
             }}";
     }
