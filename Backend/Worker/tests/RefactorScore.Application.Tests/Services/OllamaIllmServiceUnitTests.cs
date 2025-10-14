@@ -109,13 +109,13 @@ public class OllamaIllmServiceUnitTests
         
         // Assert
         result.Should().NotBeNull();
-        result.VariableScore.Should().Be(5); // Default value
+        result.VariableScore.Should().Be(5);
         result.FunctionScore.Should().Be(5);
         result.CommentScore.Should().Be(5);
         result.CohesionScore.Should().Be(5);
         result.DeadCodeScore.Should().Be(5);
         result.Justifications.Should().ContainKey("VariableNaming");
-        result.Justifications["VariableNaming"].Should().Be("Análise não disponível");
+        result.Justifications["VariableNaming"].Should().Be("Justificativa não fornecida");
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class OllamaIllmServiceUnitTests
     }
 
     [Fact]
-    public async Task AnalyzeFileAsync_WithIncompleteJson_ShouldReturnDefaults()
+    public async Task AnalyzeFileAsync_WithIncompleteJson_ShouldKeepPresentValuesAndDefaultMissing()
     {
         // Arrange
         var incompleteJsonResponse = """
@@ -190,7 +190,19 @@ public class OllamaIllmServiceUnitTests
         
         // Assert
         result.Should().NotBeNull();
-        result.VariableScore.Should().Be(5); // Falls back to default due to incomplete JSON
+        // Present keys are kept
+        result.VariableScore.Should().Be(8);
+        result.FunctionScore.Should().Be(7);
+        // Missing keys default to 5
+        result.CommentScore.Should().Be(5);
+        result.CohesionScore.Should().Be(5);
+        result.DeadCodeScore.Should().Be(5);
+        // Justifications should contain all required keys
+        result.Justifications.Should().ContainKey("VariableNaming");
+        result.Justifications.Should().ContainKey("FunctionSizes");
+        result.Justifications.Should().ContainKey("NoNeedsComments");
+        result.Justifications.Should().ContainKey("MethodCohesion");
+        result.Justifications.Should().ContainKey("DeadCode");
     }
 
     #endregion
