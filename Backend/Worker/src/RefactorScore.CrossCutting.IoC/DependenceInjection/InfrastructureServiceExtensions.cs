@@ -57,9 +57,8 @@ public static class InfrastructureServiceExtensions
             var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
             var httpClient = httpFactory.CreateClient("Ollama");
             var logger = sp.GetRequiredService<ILogger<OllamaIllmService>>();
-            var config = sp.GetRequiredService<IConfiguration>();
             var ollamaOptions = sp.GetRequiredService<IOptions<OllamaSettings>>();
-            return new OllamaIllmService(logger, httpClient, config, ollamaOptions);
+            return new OllamaIllmService(logger, httpClient, ollamaOptions);
         });
 
         return services;

@@ -106,7 +106,26 @@ public class CommitAnalysisService : ICommitAnalysisService
             analysis.CompleteFileAnalysis(file.Path, rating, suggestions);
         }
         
+        if (analysis.Files.Count == 0)
+        {
+            _logger.LogWarning(
+                "Skipping commit {CommitId} - no source code files were analyzed. Language={Language}, TotalFiles={TotalFiles}",
+                commitId, analysis.Language, filesChanges.Count);
+            return analysis;
+        }
+        
+        if (analysis.Language == "Unknown")
+        {
+            _logger.LogWarning(
+                "Skipping commit {CommitId} - language could not be determined. AnalyzedFiles={AnalyzedFiles}",
+                commitId, analysis.Files.Count);
+            return analysis;
+        }
+        
         await _repository.AddAsync(analysis);
+        _logger.LogInformation(
+            "Commit analysis saved successfully for {CommitId}. Files analyzed: {FileCount}, Language: {Language}",
+            commitId, analysis.Files.Count, analysis.Language);
         return analysis;
     }
 

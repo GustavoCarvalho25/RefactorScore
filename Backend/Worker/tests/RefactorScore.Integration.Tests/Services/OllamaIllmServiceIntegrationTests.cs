@@ -118,7 +118,7 @@ public class OllamaIllmServiceIntegrationTests : IntegrationTestBase
 
         var ollamaOptions = Options.Create(ollamaSettings);
 
-        _llmService = new OllamaIllmService(_logger, _httpClient, configuration, ollamaOptions );
+        _llmService = new OllamaIllmService(_logger, _httpClient, ollamaOptions );
     }
 
     [Fact]

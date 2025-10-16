@@ -1,158 +1,385 @@
-# RefactorScore
+# RefactorScore - Backend Worker
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)
-![Docker](https://img.shields.io/badge/Docker-Required-blue.svg)
+![Docker](https://img.shields.io/badge/Docker-27.4.0-blue.svg)
+![MongoDB](https://img.shields.io/badge/MongoDB-8.0.12-green.svg)
+![Ollama](https://img.shields.io/badge/Ollama-0.11.4-orange.svg)
 
-RefactorScore is an advanced system for analyzing Git commit quality using local Large Language Models (LLMs). The system provides detailed analysis of code changes based on Clean Code principles, helping developers and teams improve their code quality over time.
+RefactorScore é um sistema avançado para análise de qualidade de commits Git utilizando Large Language Models (LLMs) locais. O sistema fornece análise detalhada de mudanças de código baseada nos princípios de Clean Code, ajudando desenvolvedores e equipes a melhorar a qualidade do código ao longo do tempo.
 
-## 📝 Table of Contents
+> **Contexto Acadêmico**: Este projeto é um Trabalho de Conclusão de Curso (TCC) focado na aplicação prática dos princípios de Clean Code de Robert C. Martin.
 
-- [Features](#-features)
-- [System Architecture](#-system-architecture)
-- [Technology Stack](#-technology-stack)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Usage](#-usage)
-- [Code Analysis](#-code-analysis)
-- [Project Structure](#-project-structure)
-- [Testing](#-testing)
-- [Development](#-development)
-- [License](#-license)
+## Índice
 
-## ✨ Features
+- [Funcionalidades](#-funcionalidades)
+- [Arquitetura do Sistema](#-arquitetura-do-sistema)
+- [Stack Tecnológico](#-stack-tecnológico)
+- [Instalação e Configuração](#-instalação-e-configuração)
+- [Como Usar](#-como-usar)
+- [Configurações Avançadas](#️-configurações-avançadas)
+- [Análise de Código](#-análise-de-código)
+- [Estrutura do Projeto](#-estrutura-do-projeto)
+- [Testes](#-testes)
+- [Desenvolvimento](#-desenvolvimento)
+- [Licença](#-licença)
+- [Contribuindo](#-contribuindo)
 
-- **Automated Git Commit Analysis**: Automatically analyzes commits from the past 24 hours to evaluate code quality.
-- **Clean Code Evaluation**: Assesses code changes against key Clean Code principles.
-- **Local LLM Integration**: Utilizes locally hosted language models (via Ollama) for privacy and customization.
-- **Smart Processing**: Handles large files using a "window sliding" approach to manage context limitations.
-- **Change Type Detection**: Adapts analysis based on the type of code changes (added, modified, or renamed).
-- **File Type Filtering**: Focuses analysis on code files while ignoring binary files and resources.
-- **Persistent Results**: Stores analysis results in MongoDB for historical tracking and review.
-- **Caching Layer**: Uses Redis to cache intermediate results for improved performance.
-- **Background Processing**: Processes commits in the background with configurable schedules.
-- **Extensible Design**: Clean Architecture enables easy extension and adaptation to different needs.
+## ✨ Funcionalidades
 
-## 🏗 System Architecture
+- **Análise Automatizada de Commits Git**: Analisa automaticamente commits para avaliar a qualidade do código.
+- **Avaliação de Clean Code**: Avalia mudanças de código baseadas nos princípios de Clean Code.
+- **Integração com LLM Local**: Utiliza modelos de linguagem hospedados localmente (via Ollama) para privacidade e customização.
+- **Processamento Inteligente**: Lida com arquivos grandes usando abordagem de "janela deslizante" para gerenciar limitações de contexto.
+- **Detecção de Tipo de Mudança**: Adapta a análise baseada no tipo de mudança de código (adicionado, modificado ou renomeado).
+- **Filtragem de Tipo de Arquivo**: Foca a análise em arquivos de código, ignorando arquivos binários e recursos.
+- **Resultados Persistentes**: Armazena resultados de análise no MongoDB para rastreamento histórico e revisão.
+- **Processamento em Background**: Processa commits em segundo plano com agendamentos configuráveis.
+- **Design Extensível**: Clean Architecture permite fácil extensão e adaptação a diferentes necessidades.
 
-RefactorScore follows a Clean Architecture design, with well-separated layers:
+## 🏗 Arquitetura do Sistema
 
-1. **Core**: Contains all entities, interfaces, and domain rules. This layer has no dependencies on external frameworks.
-   - Entities (CommitInfo, CommitFileChange, CodeAnalysis)
-   - Interfaces (IGitRepository, ILLMService, IAnalysisRepository, ICacheService, ICodeAnalyzerService)
-   - Specifications (Result pattern for error handling)
+RefactorScore segue os princípios de Clean Architecture e Domain-Driven Design (DDD), com camadas bem separadas:
 
-2. **Application**: Contains business logic and orchestrates the flow of data.
-   - CodeAnalyzerService (manages the analysis workflow)
-   - Service registration extensions
+### **1. Domain Layer (RefactorScore.Domain)**
+Contém todas as entidades, value objects, enums e interfaces de domínio. Esta camada não possui dependências externas.
 
-3. **Infrastructure**: Contains implementations of interfaces from the Core layer.
-   - GitRepository (using LibGit2Sharp)
-   - OllamaService (for LLM integration)
-   - MongoDbAnalysisRepository (for persistent storage)
-   - RedisCacheService (for caching)
+**Entidades (Aggregates):**
+- `CommitAnalysis`: Agregado raiz que representa uma análise completa de um commit
+  - Propriedades: CommitId, Author, Email, CommitDate, AnalysisDate, Language, AddedLines, RemovedLines
+  - Coleções: Files (CommitFile), Suggestions (Suggestion)
+  - Rating calculado automaticamente baseado nos arquivos analisados
 
-4. **WorkerService**: Background service that periodically scans repositories for new commits.
-   - CommitAnalysisWorker (background service)
-   - Configuration with Serilog for logging
+- `CommitFile`: Representa um arquivo modificado em um commit
+  - Propriedades: Path, Language, Content, AddedLines, RemovedLines
+  - Rating (CleanCodeRating) e Suggestions associadas
 
-## 🔧 Technology Stack
+**Value Objects:**
+- `CleanCodeRating`: Avaliação de Clean Code com 5 critérios (1-10):
+  - VariableNaming: Qualidade da nomenclatura de variáveis
+  - FunctionSizes: Tamanho e complexidade das funções
+  - NoNeedsComments: Código auto-explicativo
+  - MethodCohesion: Coesão dos métodos
+  - DeadCode: Presença de código morto
+  - Justifications: Dicionário com justificativas detalhadas por critério
 
-- **Language and Framework**: C# and .NET 8.0
-- **LLM Integration**: Ollama (local LLM server)
-- **Storage**:
-  - MongoDB (persistent storage)
-  - Redis (caching)
-- **Git Integration**: LibGit2Sharp
-- **Containerization**: Docker and Docker Compose
-- **Logging**: Serilog
-- **Testing**: xUnit, Moq
+- `Suggestion`: Sugestão de melhoria gerada pelo LLM
+  - Title, Description, Priority (Low/Medium/High)
+  - Type (Naming, Structure, Documentation, Testing, etc.)
+  - Difficulty (Easy/Medium/Hard)
+  - StudyResources: Capítulos do Clean Code recomendados
+  - FileReference, LastUpdate
 
-## 📦 Installation
+**Interfaces de Serviços:**
+- `ILLMService`: Interface para integração com LLM
+- `IGitServiceFacade`: Interface para operações Git
+- `ICommitAnalysisService`: Interface para serviço de análise
 
-### Prerequisites
+**Repositories:**
+- `ICommitAnalysisRepository`: Interface para persistência de análises
 
+### **2. Application Layer (RefactorScore.Application)**
+Contém a lógica de negócio e orquestra o fluxo de dados.
+
+**Serviços:**
+- `CommitAnalysisService`: Orquestra a análise de commits
+  - Busca commits do repositório Git
+  - Filtra arquivos de código fonte
+  - Coordena análise via LLM
+  - Persiste resultados no MongoDB
+
+- `OllamaIllmService`: Implementação do ILLMService
+  - Integração com Ollama API
+  - Parsing inteligente de respostas JSON
+  - Retry logic e correção automática de JSON malformado
+  - Geração de sugestões baseadas nas notas de análise
+
+### **3. Infrastructure Layer (RefactorScore.Infrastructure)**
+Implementações concretas das interfaces de domínio.
+
+**Repositories:**
+- `CommitAnalysisRepository`: Persistência no MongoDB
+  - Mapeamento de entidades para documentos MongoDB
+  - Queries otimizadas
+
+**Services:**
+- `GitServiceFacade`: Integração com LibGit2Sharp
+  - Leitura de commits e diffs
+  - Detecção de tipo de mudança (Added/Modified/Deleted/Renamed)
+
+**Mappers:**
+- `GitMapper`: Conversão entre objetos LibGit2Sharp e modelos de domínio
+
+**Configurations:**
+- `OllamaSettings`: Configurações do serviço Ollama
+- `MongoDbSettings`: Configurações do MongoDB
+
+### **4. CrossCutting Layer (RefactorScore.CrossCutting.IoC)**
+Configuração de injeção de dependências e serviços transversais.
+
+**Dependency Injection:**
+- `InfrastructureServiceExtensions`: Registro de serviços de infraestrutura
+- `ApplicationServiceExtensions`: Registro de serviços de aplicação
+
+### **5. WorkerService Layer (RefactorScore.WorkerService)**
+Serviço de background que processa commits periodicamente.
+
+**Worker:**
+- `Worker`: BackgroundService que executa análises em intervalos configuráveis
+  - Busca commits recentes
+  - Processa cada commit de forma assíncrona
+  - Tratamento de erros e logging detalhado
+
+## 🔧 Stack Tecnológico
+
+### **Core Technologies**
+- **Linguagem**: C# 12
+- **Framework**: .NET 8.0
+- **Arquitetura**: Clean Architecture + Domain-Driven Design (DDD)
+
+### **LLM Integration**
+- **Ollama**: 0.11.4 (servidor LLM local)
+- **Modelo**: qwen2.5-coder:7b (4.7 GB)
+  - Especializado em análise de código
+  - Suporte a múltiplas linguagens de programação
+  - Execução local para privacidade
+
+### **Storage**
+- **MongoDB**: 8.0.12
+  - Armazenamento de análises de commits
+  - Coleção única com subdocumentos (CommitAnalysis → CommitFile → Suggestions)
+
+### **Git Integration**
+- **LibGit2Sharp**: 0.30.0
+  - Leitura de commits e diffs
+  - Análise de mudanças em arquivos
+
+### **Containerization**
+- **Docker**: 27.4.0
+- **Docker Compose**: Para orquestração de serviços
+
+### **Logging & Monitoring**
+- **Serilog**: Logging estruturado
+  - Console sink para desenvolvimento
+  - File sink para produção
+
+### **Testing**
+- **xUnit**: Framework de testes unitários
+- **NSubstitute**: Mocking framework
+- **FluentAssertions**: Assertions fluentes
+
+### **Additional Libraries**
+- **Ardalis.GuardClauses**: Validação de argumentos
+- **Mongo.Driver**: Driver oficial do MongoDB para .NET
+
+## 📦 Instalação e Configuração
+
+### Pré-requisitos
+
+#### **Software**
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+- [Docker Desktop](https://docs.docker.com/get-docker/) 27.4.0 ou superior
 - [Git](https://git-scm.com/downloads)
 
-### Clone the Repository
+#### **Hardware**
+- **RAM**: Mínimo 8GB (recomendado 16GB para o modelo LLM)
+- **Disco**: Mínimo 10GB de espaço livre
+- **GPU (Altamente Recomendado)**: 
+  - **NVIDIA GPU** com suporte a CUDA (GTX 1060 6GB ou superior)
+  - **VRAM**: Mínimo 6GB (recomendado 8GB ou mais)
+  - **Drivers**: NVIDIA Driver atualizado + NVIDIA Container Toolkit
+  - **Nota**: Embora seja possível executar em CPU, o desempenho será **significativamente mais lento** (10-20x mais lento). Para uso em produção ou análises frequentes, uma GPU NVIDIA é **essencial**.
+
+#### **Alternativa sem GPU NVIDIA**
+Se você não possui GPU NVIDIA, considere:
+- Executar em CPU (muito mais lento, mas funcional)
+- Usar modelos menores (qwen2.5-coder:1.5b ao invés de 7b)
+- Aumentar os timeouts no `appsettings.json`
+
+### Passo 1: Clonar o Repositório
 
 ```bash
 git clone https://github.com/GustavoCarvalho25/RefactorScore
-cd RefactorScore
+cd RefactorScore/Backend/Worker
 ```
 
-### Start Required Services
+### Passo 2: Iniciar Serviços com Docker
 
-Start the required services using Docker Compose:
+Inicie todos os serviços necessários usando Docker Compose:
 
 ```bash
 docker-compose up -d
 ```
 
-This will start:
-- Ollama (LLM server)
-- MongoDB (database)
-- Redis (cache)
-- Mongo Express (MongoDB admin UI)
-- Redis Commander (Redis admin UI)
+Este comando irá iniciar:
+- **Ollama** (LLM server) - `localhost:11434`
+- **MongoDB** (banco de dados) - `localhost:27017`
+- **Mongo Express** (UI admin MongoDB) - `localhost:8081`
 
-### Create Custom LLM Model
+### Passo 3: Baixar o Modelo LLM
 
-Create the custom model for code analysis:
+Aguarde o Ollama iniciar e baixe o modelo qwen2.5-coder:
 
 ```bash
-# Wait for Ollama to start
-docker exec refactorscore-ollama ollama create refactorscore -f ./ModelFiles/Modelfile
+# Verificar se o Ollama está rodando
+docker ps | grep ollama
+
+# Baixar o modelo (isso pode levar alguns minutos - 4.7 GB)
+docker exec refactorscore-ollama ollama pull qwen2.5-coder:7b
+
+# Verificar se o modelo foi baixado
+docker exec refactorscore-ollama ollama list
 ```
 
-### Configure the Application
+### Passo 4: Configurar o Aplicativo
 
-Update the `appsettings.json` file in the WorkerService project:
+Edite o arquivo `src/RefactorScore.WorkerService/appsettings.json`:
 
 ```json
 {
-  "GitRepository": {
-    "RepositoryPath": "C:\\path\\to\\your\\git\\repository"
+  "Git": {
+    "RepositoryPath": "D:\\Estudos\\Projects\\SeuRepositorio",
+    "DefaultBranch": "master"
+  },
+  "Ollama": {
+    "BaseUrl": "http://localhost:11434",
+    "Model": "qwen2.5-coder:7b",
+    "TimeoutSeconds": 300,
+    "AnalysisTimeoutSeconds": 300,
+    "SuggestionsTimeoutSeconds": 300,
+    "MaxJsonFixRetries": 5,
+    "EnableDetailedLogging": true,
+    "HealthCheckTimeoutSeconds": 30
+  },
+  "MongoDB": {
+    "ConnectionString": "mongodb://admin:admin123@localhost:27017/?authSource=admin",
+    "DatabaseName": "RefactorScore",
+    "CollectionName": "CommitAnalyses"
   }
 }
 ```
 
-## ⚙️ Configuration
+**Importante:** Ajuste o `RepositoryPath` para o caminho absoluto do repositório Git que você deseja analisar.
 
-RefactorScore can be configured through the `appsettings.json` files:
+### Passo 5: Restaurar Dependências
 
-### Git Repository
+```bash
+dotnet restore
+```
 
+### Passo 6: Executar o Worker
+
+```bash
+dotnet run --project src/RefactorScore.WorkerService/RefactorScore.WorkerService.csproj
+```
+
+Ou usando o Visual Studio/Rider, execute o projeto `RefactorScore.WorkerService`.
+
+## 🚀 Como Usar
+
+### Executando o Worker
+
+Após configurar o `appsettings.json`, execute o worker:
+
+```bash
+dotnet run --project src/RefactorScore.WorkerService/RefactorScore.WorkerService.csproj
+```
+
+O worker irá:
+1. Conectar ao repositório Git configurado
+2. Buscar commits recentes (últimos 400 dias por padrão)
+3. Analisar cada commit usando o modelo LLM
+4. Salvar os resultados no MongoDB
+
+### Visualizando Resultados
+
+#### MongoDB (Mongo Express)
+Acesse http://localhost:8081 para visualizar os dados:
+- **Database**: RefactorScore
+- **Collection**: CommitAnalyses
+
+Estrutura de um documento:
 ```json
-"GitRepository": {
-  "RepositoryPath": "C:\\your\\repo\\path\\here"
+{
+  "_id": "uuid",
+  "CommitId": "hash-do-commit",
+  "Author": "Nome do Autor",
+  "Email": "email@example.com",
+  "CommitDate": "2025-10-15T00:00:00Z",
+  "AnalysisDate": "2025-10-15T01:00:00Z",
+  "Language": "C#",
+  "AddedLines": 100,
+  "RemovedLines": 20,
+  "Files": [
+    {
+      "Path": "src/Example.cs",
+      "Language": "C#",
+      "AddedLines": 50,
+      "RemovedLines": 10,
+      "Rating": {
+        "VariableNaming": 8,
+        "FunctionSizes": 7,
+        "NoNeedsComments": 6,
+        "MethodCohesion": 9,
+        "DeadCode": 8,
+        "Justifications": {
+          "VariableNaming": "As variáveis têm nomes claros...",
+          "FunctionSizes": "As funções são bem dimensionadas...",
+          ...
+        }
+      },
+      "Suggestions": [
+        {
+          "Title": "Melhorar nomenclatura de variáveis",
+          "Description": "Renomear variável 'data' para 'userData'",
+          "Priority": "Medium",
+          "Type": "Naming",
+          "Difficulty": "Easy",
+          "StudyResources": ["Capítulo 2 - Nomes significativos"]
+        }
+      ]
+    }
+  ]
 }
 ```
 
-### Ollama LLM
+### Logs
+
+Os logs são exibidos no console durante a execução. Para logs mais detalhados, configure `EnableDetailedLogging: true` no `appsettings.json`.
+
+## ⚙️ Configurações Avançadas
+
+### Parâmetros do Ollama
 
 ```json
 "Ollama": {
-  "BaseUrl": "http://localhost:11434/",
-  "DefaultModel": "refactorscore",
-  "Temperature": 0.1,
-  "MaxTokens": 2048,
-  "TopP": 0.9,
-  "TopK": 40
+  "BaseUrl": "http://localhost:11434",
+  "Model": "qwen2.5-coder:7b",
+  "TimeoutSeconds": 300,              // Timeout geral para requisições
+  "AnalysisTimeoutSeconds": 300,      // Timeout para análise de código
+  "SuggestionsTimeoutSeconds": 300,   // Timeout para geração de sugestões
+  "MaxJsonFixRetries": 5,             // Tentativas de correção de JSON
+  "EnableDetailedLogging": true,      // Logs detalhados
+  "HealthCheckTimeoutSeconds": 30     // Timeout para health check
 }
 ```
 
-### Redis Cache
+**Parâmetros do Modelo LLM:**
+- `temperature`: 0.4 (controla criatividade - menor = mais determinístico)
+- `top_p`: 0.95 (nucleus sampling)
+- `top_k`: 60 (limita tokens considerados)
+- `repeat_penalty`: 1.1 (penaliza repetições)
 
-```json
-"RedisCache": {
-  "ConnectionString": "localhost:6379",
-  "KeyPrefix": "refactorscore",
-  "DatabaseId": 0,
-  "DefaultExpiryHours": 24
-}
+### Configuração do Worker
+
+O worker pode ser configurado para ajustar o período de análise:
+
+```csharp
+// Em Worker.cs, linha ~51
+var recentCommits = await _gitService.GetCommitsByPeriodAsync(
+    DateTime.Now.AddDays(-400),  // Ajuste este valor
+    DateTime.Now
+);
 ```
 
 ### MongoDB
@@ -161,142 +388,164 @@ RefactorScore can be configured through the `appsettings.json` files:
 "MongoDB": {
   "ConnectionString": "mongodb://admin:admin123@localhost:27017/?authSource=admin",
   "DatabaseName": "RefactorScore",
-  "AnaliseCommitCollectionName": "AnaliseDeCommits",
-  "AnaliseArquivoCollectionName": "AnaliseDeArquivos",
-  "RecomendacoesCollectionName": "Recomendacoes"
+  "CollectionName": "AnaliseDeCommits"
 }
 ```
 
-### Worker Service
+**Nota**: A aplicação usa uma única coleção (`AnaliseDeCommits`) com subdocumentos para Files e Suggestions, seguindo o padrão de agregados do DDD.
 
-```json
-"Worker": {
-  "ScanIntervalMinutes": 60,
-  "MaxProcessingCommits": 10
-}
+### Configuração de GPU (NVIDIA)
+
+Para melhor desempenho, configure o Docker para usar GPU NVIDIA:
+
+#### **1. Instalar NVIDIA Container Toolkit**
+
+**Windows (WSL2):**
+```bash
+# No WSL2 Ubuntu
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-docker2
+sudo systemctl restart docker
 ```
 
-## 🚀 Usage
+**Linux:**
+```bash
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
 
-### Run the Worker Service
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
+```
+
+#### **2. Verificar GPU no Docker**
 
 ```bash
-dotnet run --project src/WorkerService/RefactorScore.WorkerService.csproj
+# Verificar se a GPU está disponível
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
 ```
 
-This will start the worker service, which will:
-1. Connect to your specified Git repository
-2. Analyze commits from the past 24 hours
-3. Store the analysis results in MongoDB
-4. Run periodically based on the configured interval
+#### **3. Executar sem GPU (CPU only)**
 
-### View Analysis Results
+Se você não possui GPU NVIDIA, edite o `docker-compose.yml` e remova a seção `deploy`:
 
-You can access the analysis results through:
+```yaml
+ollama:
+  image: ollama/ollama:latest
+  container_name: refactorscore-ollama
+  ports:
+    - "11434:11434"
+  volumes:
+    - ollama_data:/root/.ollama
+  environment:
+    - OLLAMA_MODELS=/root/.ollama/models
+  # Remova toda a seção 'deploy' abaixo
+  restart: unless-stopped
+```
 
-- **MongoDB Express**: http://localhost:8081
-  - Navigate to the "RefactorScore" database and view the following collections:
-    - `AnaliseDeCommits`: Full commit analyses
-    - `AnaliseDeArquivos`: Individual file analyses
-    - `Recomendacoes`: Detailed recommendations for improving code
+**⚠️ Atenção**: Executar em CPU resultará em análises **muito mais lentas** (pode levar 5-10 minutos por arquivo ao invés de 30-60 segundos).
 
-- **Redis Commander**: http://localhost:8082
-  - View cached analyses and intermediate results
+## 📊 Análise de Código
 
-## 📊 Code Analysis
+O RefactorScore avalia os seguintes aspectos do Clean Code (em uma escala de 0-10):
 
-RefactorScore evaluates the following aspects of Clean Code (on a scale of 0-10):
+1. **Nomenclatura de Variáveis**: Avalia se os nomes das variáveis são claros, descritivos e seguem convenções de nomenclatura.
+2. **Tamanho de Funções**: Avalia se as funções são pequenas, focadas e têm uma única responsabilidade.
+3. **Uso de Comentários**: Verifica a presença e qualidade de comentários úteis (não código autoexplicativo).
+4. **Coesão de Métodos**: Analisa se os métodos fazem uma coisa e se estão organizados logicamente.
+5. **Ausência de Código Morto**: Identifica e penaliza código redundante ou não utilizado.
 
-1. **Variable Naming**: Assesses whether variable names are clear, descriptive, and follow naming conventions.
-2. **Function Size**: Evaluates if functions are small, focused, and have a single responsibility.
-3. **Comment Usage**: Checks for the presence and quality of helpful comments (not self-explanatory code).
-4. **Method Cohesion**: Analyzes if methods do one thing and if they're logically organized.
-5. **Dead Code Avoidance**: Identifies and penalizes redundant or unused code.
+Cada análise produz:
+- Notas individuais (0-10) para cada critério
+- Uma nota geral (média de todos os critérios)
+- Justificativa textual explicando a avaliação
 
-Each analysis produces:
-- Individual scores (0-10) for each criterion
-- An overall score (average of all criteria)
-- Textual justification explaining the assessment
-
-## 📂 Project Structure
+## 📂 Estrutura do Projeto
 
 ```
 RefactorScore/
-├── docker-compose.yml        # Docker services configuration
-├── ModelFiles/               # LLM model configuration files
-│   └── Modelfile             # Custom Ollama model definition
-├── src/                      # Source code
-│   ├── Core/                 # Core entities and interfaces
-│   │   ├── Entities/         # Domain entities
-│   │   ├── Interfaces/       # Domain interfaces
-│   │   └── Specifications/   # Result pattern
-│   ├── Application/          # Business logic and use cases
-│   │   └── Services/         # Application services
-│   ├── Infrastructure/       # External implementations
-│   │   ├── GitIntegration/   # Git repository implementation
-│   │   ├── MongoDB/          # MongoDB repository
-│   │   ├── Ollama/           # LLM service
-│   │   └── RedisCache/       # Redis cache service
-│   └── WorkerService/        # Background service
-│       └── Workers/          # Worker implementations
-└── tests/                    # Test projects
-    ├── Core.Tests/           # Unit tests for Core layer
-    ├── Application.Tests/    # Unit tests for Application layer
-    └── Integration.Tests/    # Integration tests
+├── docker-compose.yml        # Configuração dos serviços Docker
+├── ModelFiles/               # Arquivos de configuração do modelo LLM
+│   └── Modelfile             # Definição do modelo Ollama personalizado
+├── src/                      # Código fonte
+│   ├── Domain/               # Camada de domínio
+│   │   ├── Entities/         # Entidades de domínio
+│   │   ├── ValueObjects/     # Objetos de valor
+│   │   ├── Enums/           # Enumerações
+│   │   └── Interfaces/      # Interfaces de domínio
+│   ├── Application/         # Camada de aplicação
+│   │   └── Services/        # Serviços de aplicação
+│   ├── Infrastructure/      # Camada de infraestrutura
+│   │   ├── Repositories/    # Implementações de repositórios
+│   │   ├── Services/        # Serviços de infraestrutura
+│   │   └── Mappers/         # Mapeadores
+│   ├── CrossCutting.IoC/    # Injeção de dependências
+│   │   └── DependenceInjection/
+│   └── WorkerService/       # Serviço de background
+│       └── Worker.cs        # Implementação do worker
+└── tests/                   # Projetos de teste
+    ├── Domain.Tests/        # Testes unitários da camada de domínio
+    ├── Application.Tests/   # Testes unitários da camada de aplicação
+    └── Integration.Tests/   # Testes de integração
 ```
 
-## 🧪 Testing
+## 🧪 Testes
 
-The project includes comprehensive tests:
+O projeto inclui testes abrangentes:
 
-### Unit Tests
+### Testes Unitários
 
 ```bash
-dotnet test tests/Core.Tests/RefactorScore.Core.Tests.csproj
+dotnet test tests/Domain.Tests/RefactorScore.Domain.Tests.csproj
 dotnet test tests/Application.Tests/RefactorScore.Application.Tests.csproj
 ```
 
-### Integration Tests
+### Testes de Integração
 
 ```bash
 dotnet test tests/Integration.Tests/RefactorScore.Integration.Tests.csproj
 ```
 
-Note: Integration tests require running infrastructure (MongoDB, Redis, and Ollama).
+**Nota**: Os testes de integração requerem a execução da infraestrutura (MongoDB, Redis e Ollama).
 
-## 🛠 Development
+## 🛠 Desenvolvimento
 
-### Building the Project
+### Compilando o Projeto
 
 ```bash
 dotnet build
 ```
 
-### Running with Different Configurations
+### Executando com Diferentes Configurações
 
-For development environment:
+Para ambiente de desenvolvimento:
 
 ```bash
 dotnet run --project src/WorkerService/RefactorScore.WorkerService.csproj --environment Development
 ```
 
-### Extending the System
+### Estendendo o Sistema
 
-To add new analysis criteria:
-1. Extend the `CleanCodeAnalysis` class in the Core layer
-2. Update the LLM prompt in the `Modelfile`
-3. Modify the `CodeAnalyzerService` to handle the new criteria
+Para adicionar novos critérios de análise:
+1. Estenda a classe `CleanCodeRating` na camada de domínio
+2. Atualize o prompt do LLM no `Modelfile`
+3. Modifique o `CommitAnalysisService` para tratar os novos critérios
 
-## 📄 License
+## 📄 Licença
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Este projeto está licenciado sob a MIT License - veja o arquivo LICENSE para detalhes.
 
-## 📚 Contributing
+## 📚 Contribuindo
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contribuições são bem-vindas! Sinta-se à vontade para submeter um Pull Request.
 
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Faça um fork do projeto
+2. Crie sua feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit suas mudanças (`git commit -m 'Adiciona uma funcionalidade incrível'`)
+4. Push para a branch (`git push origin feature/amazing-feature`)
+5. Abra um Pull Request

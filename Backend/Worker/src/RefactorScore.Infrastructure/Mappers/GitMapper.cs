@@ -168,25 +168,71 @@ public partial class GitMapper
         if (string.IsNullOrEmpty(filePath))
             return false;
 
-        var sourceCodeExtensions = new HashSet<string>
+        var blacklistedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".cs", ".java", ".js", ".ts", ".py", ".rb", ".php", ".go",
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "composer.lock",
+            ".gitignore",
+            ".dockerignore",
+            ".editorconfig",
+            ".prettierrc",
+            ".eslintrc",
+            ".eslintrc.json",
+            "tsconfig.json",
+            "jsconfig.json",
+            "vite.config.ts",
+            "vite.config.js",
+            "webpack.config.js",
+            "rollup.config.js"
+        };
+
+        var fileName = Path.GetFileName(filePath);
+        if (blacklistedFiles.Contains(fileName))
+        {
+            _logger.LogDebug("Skipping blacklisted file: {FilePath}", filePath);
+            return false;
+        }
+
+        var blacklistedDirectories = new[] 
+        { 
+            "node_modules", "bin", "obj", ".git", ".vs", ".vscode", 
+            "dist", "build", "coverage", ".nuxt", ".next"
+        };
+        
+        if (blacklistedDirectories.Any(dir => 
+            filePath.Contains($"/{dir}/") || 
+            filePath.Contains($"\\{dir}\\")))
+        {
+            _logger.LogDebug("Skipping file in blacklisted directory: {FilePath}", filePath);
+            return false;
+        }
+
+        var executableCodeExtensions = new HashSet<string>
+        {
+            ".cs", ".java", ".py", ".rb", ".php", ".go",
             ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hxx",
             ".swift", ".kt", ".rs", ".scala", ".clj", ".hs", ".ml",
             ".pl", ".pm", ".r", ".m", ".mm", ".f", ".f90", ".f95",
-
-            ".html", ".htm", ".css", ".scss", ".sass", ".less",
-            ".jsx", ".tsx", ".vue", ".svelte",
-
+            ".dart", ".lua",
+            
+            ".js", ".ts", ".jsx", ".tsx",
+            ".vue", ".svelte",
+            
             ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
-            ".sql", ".xml", ".json", ".yaml", ".yml", ".toml",
-
-            ".dart",
-
-            ".lua", ".vim", ".el", ".lisp", ".scm", ".rkt"
+            ".sql"
         };
+
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        var isCode = executableCodeExtensions.Contains(extension);
         
-        return sourceCodeExtensions.Contains(Path.GetExtension(filePath).ToLowerInvariant());
+        if (!isCode)
+        {
+            _logger.LogDebug("File extension {Extension} not recognized as source code: {FilePath}", extension, filePath);
+        }
+        
+        return isCode;
     }
 
     private string GetFileContentDiff(PatchEntryChanges patchEntry)
