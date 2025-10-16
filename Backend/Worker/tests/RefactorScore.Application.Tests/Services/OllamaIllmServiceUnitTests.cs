@@ -55,7 +55,7 @@ public class OllamaIllmServiceUnitTests
     private OllamaIllmService CreateService()
     {
         var httpClient = _mockHttp.ToHttpClient();
-        return new OllamaIllmService(_logger, httpClient, _configuration, _ollamaOptions);
+        return new OllamaIllmService(_logger, httpClient, _ollamaOptions);
     }
 
     #region AnalyzeFileAsync Tests
@@ -514,7 +514,7 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(null, _mockHttp.ToHttpClient(), _configuration, _ollamaOptions));
+            new OllamaIllmService(null, _mockHttp.ToHttpClient(), _ollamaOptions));
     }
 
     [Fact]
@@ -522,15 +522,7 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(_logger, null, _configuration, _ollamaOptions));
-    }
-
-    [Fact]
-    public void Constructor_WithNullConfiguration_ShouldThrowArgumentNullException()
-    {
-        // Arrange & Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), null, _ollamaOptions));
+            new OllamaIllmService(_logger, null, _ollamaOptions));
     }
 
     [Fact]
@@ -538,7 +530,7 @@ public class OllamaIllmServiceUnitTests
     {
         // Arrange & Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), _configuration, null));
+            new OllamaIllmService(_logger, _mockHttp.ToHttpClient(), null));
     }
 
     [Fact]

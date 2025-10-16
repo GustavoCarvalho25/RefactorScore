@@ -15,10 +15,9 @@ public class OllamaIllmService : ILLMService
     private readonly HttpClient _httpClient;
     private readonly ILogger<OllamaIllmService> _logger;
     private readonly string _ollamaUrl;
-    private readonly IConfiguration _configuration;
     private readonly OllamaSettings _ollamaSettings;
 
-    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, IConfiguration configuration, IOptions<OllamaSettings> ollamaOptions)
+    public OllamaIllmService(ILogger<OllamaIllmService> logger, HttpClient httpClient, IOptions<OllamaSettings> ollamaOptions)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
@@ -28,7 +27,6 @@ public class OllamaIllmService : ILLMService
             
         _ollamaSettings = ollamaOptions.Value ?? throw new ArgumentNullException(nameof(ollamaOptions.Value));
         _ollamaUrl = _ollamaSettings.BaseUrl ?? throw new ArgumentNullException(nameof(_ollamaSettings.BaseUrl));
-        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task<LLMAnalysisResult> AnalyzeFileAsync(string fileContent)
@@ -37,7 +35,7 @@ public class OllamaIllmService : ILLMService
         {
             var prompt = BuildAnalysisPrompt(fileContent);
             var response = await CallOllamaAsync(prompt);
-            //adicionando comentario commits
+
             return await ParseAnalysisResponse(response);
         }
         catch (Exception ex)
@@ -63,7 +61,7 @@ public class OllamaIllmService : ILLMService
                     _logger.LogInformation("Retrying suggestions request (attempt {Attempt}/{MaxAttempts})", attempt, maxAttempts);
                 }
 
-                var response = await CallOllamaAsync(prompt);
+                var response = await CallOllamaAsync(prompt, forceJsonObject: false);
                 return await ParseSuggestionsResponse(response);
             }
             catch (TimeoutException tex)
@@ -100,44 +98,90 @@ public class OllamaIllmService : ILLMService
 
     private string BuildSuggestionsPrompt(string fileContent, CleanCodeRating rating)
     {
+        var scores = new List<(string Criterion, int Score, string Type, string Chapter)>
+        {
+            ("Variable Naming", rating.VariableNaming, "Naming", "Capítulo 2 - Nomes significativos"),
+            ("Function Sizes", rating.FunctionSizes, "Structure", "Capítulo 3 - Funções"),
+            ("Comments", rating.NoNeedsComments, "Documentation", "Capítulo 4 - Comentários"),
+            ("Cohesion", rating.MethodCohesion, "Cohesion", "Capítulo 10 - Classes"),
+            ("Dead Code", rating.DeadCode, "DeadCode", "Capítulo 17 - Odores e Heurísticas")
+        };
+        
+        var priorityAreas = scores.OrderBy(s => s.Score).Take(3).ToList();
+        var priorityAreasText = string.Join(", ", priorityAreas.Select(p => $"{p.Criterion} ({p.Score}/10)"));
+        
         return $@"
-                Gere entre 3 e 5 sugestões objetivas para melhorar o código abaixo, considerando as notas atuais de Clean Code.
-                Responda SOMENTE com um array JSON válido. Não inclua texto fora do JSON.
-                Cada item do array deve conter exatamente estas chaves: title, description, priority, type, difficulty, studyResources.
-                Regras obrigatórias:
-                - priority deve ser UM de: Low, Medium, High.
-                - difficulty deve ser UM de: Easy, Medium, Hard.
-                - type deve ser UM de: CodeStyle, Naming, Structure, Documentation, Testing, ErrorHandling, Performance, Refactoring, Cohesion, DeadCode.
-                - Retorne entre 3 e 5 itens no array.
-                - studyResources é uma lista de textos.
+        NOVA TAREFA - IGNORE INSTRUÇÕES ANTERIORES
 
-                Índice de capítulos (Clean Code) para referência em studyResources:
-                1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
-                9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
-                16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
-                Ao sugerir recursos de estudo, retorne o(s) capítulo(s) pertinente(s) por nome, por exemplo: ""Capítulo 2 - Nomes significativos"".
+        Você deve gerar EXATAMENTE 3 sugestões de melhoria para o código.
 
-                Notas atuais (1-10):
-                - Variable Naming: {rating.VariableNaming}
-                - Function Sizes: {rating.FunctionSizes}
-                - No Needs Comments: {rating.NoNeedsComments}
-                - Method Cohesion: {rating.MethodCohesion}
-                - Dead Code: {rating.DeadCode}
+        IMPORTANTE:
+        - Responda SOMENTE com um array JSON (iniciando com [ e terminando com ])
+        - NÃO retorne um objeto com chaves como VariableScore, FunctionScore, etc
+        - NÃO retorne justifications
+        - Retorne um ARRAY de 3 objetos de sugestões
 
-                Código:
-                {fileContent}
+        Índice de capítulos (Clean Code) para referência futura:
+            1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
+            9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
+            16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
 
-                Exemplo de formato (apenas estrutura):
-                [
-                  {{
-                    ""title"": ""Melhorar nomenclatura de variáveis"",
-                    ""description"": ""Use nomes descritivos e consistentes para variáveis e parâmetros"",
-                    ""priority"": ""Medium"",
-                    ""type"": ""Naming"",
-                    ""difficulty"": ""Easy"",
-                    ""studyResources"": [""Capítulo 2 - Nomes significativos""]
-                  }}
-                ]";
+        Notas já calculadas (1-10):
+        - Variable Naming: {rating.VariableNaming}/10
+        - Function Sizes: {rating.FunctionSizes}/10
+        - Comments: {rating.NoNeedsComments}/10
+        - Cohesion: {rating.MethodCohesion}/10
+        - Dead Code: {rating.DeadCode}/10
+
+        ÁREAS PRIORITÁRIAS (notas mais baixas): {priorityAreasText}
+
+        REGRAS PARA SUGESTÕES:
+        1. FOQUE nas 3 áreas com notas mais baixas listadas acima
+        2. Para notas < 7: Sugira correções específicas de problemas identificados
+        3. Para notas 7-8: Sugira melhorias incrementais
+        4. Para notas > 8: Sugira boas práticas avançadas ou otimizações
+        5. Seja ESPECÍFICO ao código fornecido (cite nomes de variáveis/funções/classes)
+        6. NÃO sugira melhorias para áreas com notas altas (> 8) a menos que seja uma otimização avançada
+        7. CRÍTICO: Cite APENAS elementos que existem no código fornecido acima
+        8. CRÍTICO: NÃO invente nomes de variáveis, funções ou classes
+        9. CRÍTICO: Se não houver problemas específicos, sugira boas práticas gerais sem inventar exemplos
+
+        Código:
+        {fileContent}
+
+        Tipos válidos: CodeStyle, Naming, Structure, Documentation, Testing, ErrorHandling, Performance, Refactoring, Cohesion, DeadCode
+        Prioridades válidas: Low, Medium, High
+        Dificuldades válidas: Easy, Medium, Hard
+
+        FORMATO OBRIGATÓRIO (retorne exatamente assim, com 3 objetos):
+        [
+          {{
+            ""title"": ""Sugestão específica para {priorityAreas[0].Criterion}"",
+            ""description"": ""Descrição detalhada baseada no código"",
+            ""priority"": ""High"",
+            ""type"": ""{priorityAreas[0].Type}"",
+            ""difficulty"": ""Medium"",
+            ""studyResources"": [""{priorityAreas[0].Chapter}""]
+          }},
+          {{
+            ""title"": ""Sugestão específica para {priorityAreas[1].Criterion}"",
+            ""description"": ""Descrição detalhada baseada no código"",
+            ""priority"": ""Medium"",
+            ""type"": ""{priorityAreas[1].Type}"",
+            ""difficulty"": ""Easy"",
+            ""studyResources"": [""{priorityAreas[1].Chapter}""]
+          }},
+          {{
+            ""title"": ""Sugestão específica para {priorityAreas[2].Criterion}"",
+            ""description"": ""Descrição detalhada baseada no código"",
+            ""priority"": ""Low"",
+            ""type"": ""{priorityAreas[2].Type}"",
+            ""difficulty"": ""Easy"",
+            ""studyResources"": [""{priorityAreas[2].Chapter}""]
+          }}
+        ]
+
+        RESPONDA APENAS COM O ARRAY JSON. Não adicione texto antes ou depois.";
     }
 
 
@@ -146,16 +190,23 @@ public class OllamaIllmService : ILLMService
         return $@"
             Avalie o código abaixo como um analista sênior de Clean Code.
             Atribua notas inteiras de 1 a 10 para as chaves: variableScore, functionScore, commentScore, cohesionScore, deadCodeScore.
+            Sendo 10 a melhor nota, para casos de boa qualidade ou quando não houve alterações ou problemas detectados a esse critério, e 0 a pior nota, para casos de código muito ruim ou que precisa de muitas melhorias. 
+            A nota 5 deve ser usada para código mediano, que pode melhorar em vários aspectos. Tem que haver fundamento para as avaliações muito boas, medianas ou ruins, sempre pensando no critério específico e nas alterações que houveram no código.
+            Faça uma analise considerando as notas de 0 a 10, ponderando a qualidade e considerando o significado dos critérios. VariableScore deve considerar a clareza e consistência dos nomes de variáveis. FunctionScore deve avaliar o tamanho e foco das funções.
+            CommentScore deve analisar a necessidade e utilidade dos comentários, lembrando que o CleanCode recomenda não ter comentários, e só ter em casos muito necessários (Se houver comentarios demais ou desnecessários, a nota deve ser ruim).
+            CohesionScore deve medir a coesão das responsabilidades dentro das classes/métodos, lembrando que classes e funções devem ser relativamente pequenas e ter uma responsabilidade única.
+            DeadCodeScore deve identificar a presença de código morto ou redundante que poderia ser eliminado (Se houver deadCode, a nota deve cair proporcionalmente à quantidade, mas se não tiver deadCode, a nota deve ser boa).
             Inclua um objeto justifications com justificativas textuais por critério usando EXATAMENTE as chaves: VariableNaming, FunctionSizes, NoNeedsComments, MethodCohesion, DeadCode.
             Responda SOMENTE com um JSON válido contendo exatamente estas chaves no objeto raiz.
-            Se não tiver confiança para alguma nota, escolha o valor inteiro mais apropriado entre 1 e 10.
 
             Regras das justificativas (obrigatório):
-            - Devem ser específicas e baseadas no código fornecido, em português claro.
+            - Devem ser específicas e baseadas EXCLUSIVAMENTE no código fornecido, em português claro.
             - Proibido usar frases genéricas como: ""Justificativa para nota"", ""Genérico"", ""N/A"", ""Sem detalhes"".
             - Cada justificativa deve referenciar pelo menos 2 elementos concretos (ex.: nomes de funções/métodos/variáveis, estruturas como if/for/linq) e, quando possível, citar o capítulo pertinente.
             - Tamanho recomendado entre 10 e 35 palavras por justificativa (curta e objetiva).
             - NÃO COPIE o exemplo abaixo; gere justificativas originais com base no código fornecido.
+            - CRÍTICO: NÃO invente nomes de variáveis, funções ou classes que NÃO existem no código fornecido.
+            - CRÍTICO: Cite APENAS elementos que aparecem literalmente no código acima.
 
             Índice de capítulos (Clean Code) para referência futura:
             1 - Código Limpo; 2 - Nomes significativos; 3 - Funções; 4 - Comentários; 5 - Formatação; 6 - Objetos e Estruturas de Dados; 7 - Tratamento de Erro; 8 - Limites;
@@ -163,9 +214,9 @@ public class OllamaIllmService : ILLMService
             16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
 
             Código:
-            {fileContent}
+            ""{fileContent}""
 
-            RESPONDER SOMENTE com um JSON válido nessa estrutura (use exatamente estes nomes de chave em seus respectivos cases), com as notas e justificativas coerentes ao código fornecido e seguindo TODAS as regras:
+            RESPONDER SOMENTE com um JSON válido nessa estrutura, com as notas e justificativas coerentes ao código fornecido e seguindo TODAS as regras:
             {{
               ""variableScore"": número,
               ""functionScore"": número,
@@ -186,23 +237,49 @@ public class OllamaIllmService : ILLMService
             - As justificativas DEVEM ter entre 10 e 35 palavras.
             - As justificativas DEVEM ser específicas e baseadas no código fornecido.
             - Não inclua texto fora do JSON.
-            - As chaves de justifications DEVEM ser exatamente as cinco acima.";
+            - As chaves de justifications DEVEM ser exatamente as cinco acima.
+
+            Exemplo de formato (apenas estrutura e NÃO DEVE SER COPIADO. Você deve gerar justificativas originais com base no código fornecido):
+            {{
+              ""variableScore"": 7,
+              ""functionScore"": 6,
+              ""commentScore"": 5,
+              ""cohesionScore"": 8,
+              ""deadCodeScore"": 9,
+              ""justifications"": {{
+                ""VariableNaming"": ""[EXEMPLO] A nomenclatura de variáveis é clara, mas alguns nomes como 'x' e 'y' poderiam ser mais descritivos. Recomendo revisar o Capítulo 2 - Nomes significativos."",
+                ""FunctionSizes"": ""[EXEMPLO] As funções são geralmente concisas, porém a função 'Calculate' tem 50 linhas, o que dificulta a leitura. Sugiro dividir em funções menores conforme o Capítulo 3 - Funções."",
+                ""NoNeedsComments"": ""[EXEMPLO] O código é autoexplicativo na maioria das partes, mas há comentários redundantes como '// Incrementa i'. Considere eliminar comentários desnecessários seguindo o Capítulo 4 - Comentários."",
+                ""MethodCohesion"": ""[EXEMPLO] A coesão dos métodos é boa, mas a classe 'UserManager' mistura responsabilidades de autenticação e gerenciamento de usuários. Veja o Capítulo 10 - Classes para melhorar a coesão."",
+                ""DeadCode"": ""[EXEMPLO] Não foram encontrados trechos significativos de código morto. O código está limpo e sem variáveis ou funções não utilizadas. Recomendo manter essa prática conforme o Capítulo 17 - Odores e Heurísticas.""
+              }}
+            }}";
     }
 
-    private async Task<string> CallOllamaAsync(string prompt)
+    private async Task<string> CallOllamaAsync(string prompt, bool forceJsonObject = true)
     {
         var timeoutSeconds = _ollamaSettings.AnalysisTimeoutSeconds;
         var model = _ollamaSettings.Model;
-        var request = new
+        
+        var requestObject = new Dictionary<string, object>
         {
-            model,
-            prompt,
-            format = "json",
-            options = new {temperature = 0.2},
-            stream = false
+            ["model"] = model,
+            ["prompt"] = prompt,
+            ["stream"] = false,
+            ["options"] = new {
+                temperature = 0.4,
+                top_p = 0.95,
+                top_k = 60, 
+                repeat_penalty = 1.1,
+            }
         };
+        
+        if (forceJsonObject)
+        {
+            requestObject["format"] = "json";
+        }
 
-        var json = JsonSerializer.Serialize(request);
+        var json = JsonSerializer.Serialize(requestObject);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         
         using var cts = new CancellationTokenSource();
@@ -212,7 +289,8 @@ public class OllamaIllmService : ILLMService
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             
             if (_ollamaSettings.EnableDetailedLogging)
-                _logger.LogInformation("HttpClient timeout configured to {TimeoutSeconds} seconds", timeoutSeconds);
+                _logger.LogInformation("HttpClient timeout configured to {TimeoutSeconds} seconds (forceJsonObject: {ForceJsonObject})", 
+                    timeoutSeconds, forceJsonObject);
         }
 
         try
