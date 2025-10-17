@@ -146,34 +146,47 @@ public class OllamaIllmService : ILLMService
         8. CRÍTICO: NÃO invente nomes de variáveis, funções ou classes
         9. CRÍTICO: Se não houver problemas específicos, sugira boas práticas gerais sem inventar exemplos
 
-        Código:
+         REGRA ABSOLUTA 
+        VOCÊ DEVE GERAR SUGESTÕES BASEADAS EXCLUSIVAMENTE NO CÓDIGO ABAIXO.
+        NÃO MENCIONE variáveis, funções ou classes que NÃO EXISTEM no código.
+        CITE APENAS elementos LITERAIS do código fornecido.
+        Se não houver problemas reais, seja HONESTO e sugira boas práticas gerais.
+        
+        Código a analisar:
         {fileContent}
 
         Tipos válidos: CodeStyle, Naming, Structure, Documentation, Testing, ErrorHandling, Performance, Refactoring, Cohesion, DeadCode
         Prioridades válidas: Low, Medium, High
         Dificuldades válidas: Easy, Medium, Hard
 
+        IMPORTANTE - REGRAS PARA DESCRIÇÕES:
+        - Cite NOMES REAIS de variáveis, funções ou classes do código acima
+        - Se a nota for alta (>7), NÃO force sugestões genéricas
+        - Para notas altas, sugira apenas otimizações específicas ou diga que está bom
+        - NUNCA invente elementos que não existem no código
+        - Seja HONESTO: se não há problema real, não force uma sugestão
+        
         FORMATO OBRIGATÓRIO (retorne exatamente assim, com 3 objetos):
         [
           {{
-            ""title"": ""Sugestão específica para {priorityAreas[0].Criterion}"",
-            ""description"": ""Descrição detalhada baseada no código"",
+            ""title"": ""[Título específico baseado no código real]"",
+            ""description"": ""[Descrição citando elementos REAIS do código]"",
             ""priority"": ""High"",
             ""type"": ""{priorityAreas[0].Type}"",
             ""difficulty"": ""Medium"",
             ""studyResources"": [""{priorityAreas[0].Chapter}""]
           }},
           {{
-            ""title"": ""Sugestão específica para {priorityAreas[1].Criterion}"",
-            ""description"": ""Descrição detalhada baseada no código"",
+            ""title"": ""[Título específico baseado no código real]"",
+            ""description"": ""[Descrição citando elementos REAIS do código]"",
             ""priority"": ""Medium"",
             ""type"": ""{priorityAreas[1].Type}"",
             ""difficulty"": ""Easy"",
             ""studyResources"": [""{priorityAreas[1].Chapter}""]
           }},
           {{
-            ""title"": ""Sugestão específica para {priorityAreas[2].Criterion}"",
-            ""description"": ""Descrição detalhada baseada no código"",
+            ""title"": ""[Título específico baseado no código real]"",
+            ""description"": ""[Descrição citando elementos REAIS do código]"",
             ""priority"": ""Low"",
             ""type"": ""{priorityAreas[2].Type}"",
             ""difficulty"": ""Easy"",
@@ -190,7 +203,15 @@ public class OllamaIllmService : ILLMService
         return $@"
             Avalie o código abaixo como um analista sênior de Clean Code.
             Atribua notas inteiras de 1 a 10 para as chaves: variableScore, functionScore, commentScore, cohesionScore, deadCodeScore.
-            Sendo 10 a melhor nota, para casos de boa qualidade ou quando não houve alterações ou problemas detectados a esse critério, e 0 a pior nota, para casos de código muito ruim ou que precisa de muitas melhorias. 
+            
+            CRITÉRIOS DE PONTUAÇÃO:
+            - 9-10: Excelente. Código exemplar seguindo Clean Code perfeitamente.
+            - 7-8: Bom. Código limpo com pequenas oportunidades de melhoria.
+            - 5-6: Aceitável. Código funcional mas com problemas moderados de Clean Code.
+            - 3-4: Ruim. Código com problemas sérios que dificultam manutenção.
+            - 1-2: Muito ruim. Código extremamente problemático, precisa refatoração urgente.
+            
+            IMPORTANTE: Seja JUSTO e REALISTA. Não dê notas baixas sem justificativa concreta. 
             A nota 5 deve ser usada para código mediano, que pode melhorar em vários aspectos. Tem que haver fundamento para as avaliações muito boas, medianas ou ruins, sempre pensando no critério específico e nas alterações que houveram no código.
             Faça uma analise considerando as notas de 0 a 10, ponderando a qualidade e considerando o significado dos critérios. VariableScore deve considerar a clareza e consistência dos nomes de variáveis. FunctionScore deve avaliar o tamanho e foco das funções.
             CommentScore deve analisar a necessidade e utilidade dos comentários, lembrando que o CleanCode recomenda não ter comentários, e só ter em casos muito necessários (Se houver comentarios demais ou desnecessários, a nota deve ser ruim).
@@ -213,7 +234,12 @@ public class OllamaIllmService : ILLMService
             9 - Testes de Unidade; 10 - Classes; 11 - Sistemas; 12 - Emergência; 13 - Concorrência; 14 - Refinamento Sucessivo; 15 - Características Internas do JUnit;
             16 - Refatorando o SerialDate; 17 - Odores e Heurísticas.
 
-            Código:
+             ATENÇÃO CRÍTICA 
+            VOCÊ DEVE ANALISAR O CÓDIGO FORNECIDO ABAIXO.
+            NÃO INVENTE variáveis, funções ou classes que NÃO EXISTEM no código.
+            CITE APENAS elementos que APARECEM LITERALMENTE no código abaixo.
+            
+            Código a analisar:
             ""{fileContent}""
 
             RESPONDER SOMENTE com um JSON válido nessa estrutura, com as notas e justificativas coerentes ao código fornecido e seguindo TODAS as regras:
@@ -235,25 +261,12 @@ public class OllamaIllmService : ILLMService
             Regras obrigatórias:
             - Use somente números inteiros de 1 a 10.
             - As justificativas DEVEM ter entre 10 e 35 palavras.
-            - As justificativas DEVEM ser específicas e baseadas no código fornecido.
+            - As justificativas DEVEM ser específicas e baseadas EXCLUSIVAMENTE no código fornecido acima.
             - Não inclua texto fora do JSON.
             - As chaves de justifications DEVEM ser exatamente as cinco acima.
-
-            Exemplo de formato (apenas estrutura e NÃO DEVE SER COPIADO. Você deve gerar justificativas originais com base no código fornecido):
-            {{
-              ""variableScore"": 7,
-              ""functionScore"": 6,
-              ""commentScore"": 5,
-              ""cohesionScore"": 8,
-              ""deadCodeScore"": 9,
-              ""justifications"": {{
-                ""VariableNaming"": ""[EXEMPLO] A nomenclatura de variáveis é clara, mas alguns nomes como 'x' e 'y' poderiam ser mais descritivos. Recomendo revisar o Capítulo 2 - Nomes significativos."",
-                ""FunctionSizes"": ""[EXEMPLO] As funções são geralmente concisas, porém a função 'Calculate' tem 50 linhas, o que dificulta a leitura. Sugiro dividir em funções menores conforme o Capítulo 3 - Funções."",
-                ""NoNeedsComments"": ""[EXEMPLO] O código é autoexplicativo na maioria das partes, mas há comentários redundantes como '// Incrementa i'. Considere eliminar comentários desnecessários seguindo o Capítulo 4 - Comentários."",
-                ""MethodCohesion"": ""[EXEMPLO] A coesão dos métodos é boa, mas a classe 'UserManager' mistura responsabilidades de autenticação e gerenciamento de usuários. Veja o Capítulo 10 - Classes para melhorar a coesão."",
-                ""DeadCode"": ""[EXEMPLO] Não foram encontrados trechos significativos de código morto. O código está limpo e sem variáveis ou funções não utilizadas. Recomendo manter essa prática conforme o Capítulo 17 - Odores e Heurísticas.""
-              }}
-            }}";
+            - PROIBIDO mencionar elementos (variáveis, funções, comentários) que NÃO existem no código.
+            
+            ATENÇÃO: Analise APENAS o código fornecido. NÃO invente exemplos fictícios.";
     }
 
     private async Task<string> CallOllamaAsync(string prompt, bool forceJsonObject = true)
@@ -267,7 +280,7 @@ public class OllamaIllmService : ILLMService
             ["prompt"] = prompt,
             ["stream"] = false,
             ["options"] = new {
-                temperature = 0.4,
+                temperature = 0.5,
                 top_p = 0.95,
                 top_k = 60, 
                 repeat_penalty = 1.1,
