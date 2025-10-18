@@ -24,7 +24,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
     
     public CleanCodeRating? Rating => CalculateOverallRating();
     
-    public double OverallNote => Rating?.Note ?? 0.0;
+    public double OverallNote { get; private set; }
 
     private CleanCodeRating CalculateOverallRating()
     {
@@ -113,5 +113,12 @@ public class CommitAnalysis : Entity, IAggregateRoot
         _suggestions.AddRange(suggestions);
         
         CalculateChanges();
+        UpdateOverallNote();
+    }
+    
+    private void UpdateOverallNote()
+    {
+        var rating = CalculateOverallRating();
+        OverallNote = rating?.Note ?? 0.0;
     }
 }
