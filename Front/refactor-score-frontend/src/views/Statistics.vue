@@ -12,14 +12,6 @@
     <div v-else class="statistics-content">
       <div class="stats-overview">
         <div class="stat-card">
-          <h3>Total de Commits</h3>
-          <p class="stat-value">{{ statistics.totalCommits }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Média Geral</h3>
-          <p class="stat-value">{{ statistics.averageScore.toFixed(2) }}</p>
-        </div>
-        <div class="stat-card">
           <h3>Melhor Nota</h3>
           <p class="stat-value">{{ statistics.bestScore.toFixed(2) }}</p>
         </div>
@@ -38,17 +30,6 @@
             :labels="qualityDistribution.labels"
             :datasets="qualityDistribution.datasets"
             title="Commits por Qualidade"
-          />
-        </div>
-
-        <div class="chart-card">
-          <h3>Evolução Temporal</h3>
-          <LineChart
-            v-if="timelineData.labels.length > 0"
-            chart-id="timeline"
-            :labels="timelineData.labels"
-            :datasets="timelineData.datasets"
-            title="Nota Média ao Longo do Tempo"
           />
         </div>
 

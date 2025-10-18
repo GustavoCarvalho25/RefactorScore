@@ -29,7 +29,7 @@ export function useAnalysisService() {
   };
 
   const getAnalysisStatistics = async (): Promise<HttpResponse<any>> => {
-    await fetchData('get', '/statistics');
+    await fetchData('get', '');
     return {
       error,
       result,
@@ -52,6 +52,14 @@ export function useAnalysisService() {
     };
   };
 
+  const getCommitAnalysisCount = async (): Promise<HttpResponse<any>> => {
+    await fetchData('get', '/count');
+    return {
+      error,
+      result,
+    };
+  };
+
   return {
     getAnalyses,
     getAnalysisById,
@@ -59,6 +67,7 @@ export function useAnalysisService() {
     getAnalysisStatistics,
     getAnalysisByDateRange,
     getAnalysisByAuthor,
+    getCommitAnalysisCount,
     loading,
     error,
     result,

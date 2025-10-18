@@ -1,22 +1,30 @@
 <template>
   <div class="dashboard">
     <header class="dashboard-header">
-      <h1>RefactorScore Dashboard</h1>
-      <p>Análise de Commits com Clean Code</p>
+      <div class="header-content">
+        <div>
+          <h1>RefactorScore Dashboard</h1>
+          <p>Análise de Commits com Clean Code</p>
+        </div>
+        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Modo Claro' : 'Modo Escuro'">
+          <span v-if="isDark">☀️</span>
+          <span v-else>🌙</span>
+        </button>
+      </div>
     </header>
 
     <div class="dashboard-stats">
       <div class="stat-card">
         <h3>Total de Análises</h3>
-        <p class="stat-value">{{ totalAnalyses }}</p>
+        <p class="stat-value">{{ commitCount }}</p>
       </div>
       <div class="stat-card">
         <h3>Nota Média</h3>
-        <p class="stat-value">{{ averageNote.toFixed(2) }}</p>
+        <p class="stat-value">{{ averageNote }}</p>
       </div>
       <div class="stat-card">
         <h3>Arquivos Analisados</h3>
-        <p class="stat-value">{{ totalFiles }}</p>
+        <p class="stat-value">{{ uniqueFilesCount }}</p>
       </div>
       <div class="stat-card">
         <h3>Sugestões Geradas</h3>
@@ -27,45 +35,27 @@
     <div class="dashboard-charts">
       <div class="chart-card">
         <h3>Evolução da Qualidade</h3>
-        <LineChart
-          v-if="lineChartData.labels.length > 0"
-          chart-id="quality-evolution"
-          :labels="lineChartData.labels"
-          :datasets="lineChartData.datasets"
-          title="Nota ao Longo do Tempo"
-        />
+        <div class="chart-wrapper">
+          <LineChart
+            v-if="lineChartData.labels.length > 0"
+            chart-id="quality-evolution"
+            :labels="lineChartData.labels"
+            :datasets="lineChartData.datasets"
+            title="Nota ao Longo do Tempo"
+          />
+        </div>
       </div>
 
       <div class="chart-card">
         <h3>Distribuição por Linguagem</h3>
-        <BarChart
-          v-if="languageChartData.labels.length > 0"
-          chart-id="language-distribution"
-          :labels="languageChartData.labels"
-          :datasets="languageChartData.datasets"
-          title="Análises por Linguagem"
-        />
-      </div>
-    </div>
-
-    <div class="recent-analyses">
-      <h3>Análises Recentes</h3>
-      <div class="analysis-list">
-        <div
-          v-for="analysis in recentAnalyses"
-          :key="analysis.id"
-          class="analysis-item"
-          @click="goToAnalysis(analysis.id)"
-        >
-          <div class="analysis-info">
-            <h4>{{ analysis.commitId.substring(0, 8) }}</h4>
-            <p>{{ analysis.author }} - {{ formatDate(analysis.commitDate) }}</p>
-          </div>
-          <div class="analysis-score">
-            <span :class="getScoreClass(analysis.overallNote)">
-              {{ analysis.overallNote.toFixed(2) }}
-            </span>
-          </div>
+        <div class="chart-wrapper">
+          <PieChart
+            v-if="languageChartData.labels.length > 0"
+            chart-id="language-distribution"
+            :labels="languageChartData.labels"
+            :datasets="languageChartData.datasets"
+            title="Distribuição de Arquivos por Linguagem"
+          />
         </div>
       </div>
     </div>
@@ -77,37 +67,41 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { useAnalysisService } from '../server/api/analysisService';
+import { useTheme } from '../composables/useTheme';
 import LineChart from '../components/charts/LineChart.vue';
 import BarChart from '../components/charts/BarChart.vue';
+import PieChart from '../components/charts/PieChart.vue';
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
 const analysisService = useAnalysisService();
+const { isDark, toggleTheme, initTheme } = useTheme();
 
 const analyses = ref<any[]>([]);
-
+const commitCount = ref<number>(0);
+const averageNote = ref<number>(0);
+const uniqueFilesCount = ref<number>(0);
+const totalSuggestions = ref<number>(0);
+const languageFrequency = ref<{ language: string; count: number }[]>([]);
 const totalAnalyses = computed(() => analyses.value.length);
-const averageNote = computed(() => {
-  if (analyses.value.length === 0) return 0;
-  const sum = analyses.value.reduce((acc, a) => acc + a.overallNote, 0);
-  return sum / analyses.value.length;
-});
 const totalFiles = computed(() =>
-  analyses.value.reduce((acc, a) => acc + a.files.length, 0)
-);
-const totalSuggestions = computed(() =>
-  analyses.value.reduce((acc, a) => acc + a.suggestions.length, 0)
+  analyses.value.reduce((acc, a) => acc + (a.files?.length || 0), 0)
 );
 
-const recentAnalyses = computed(() =>
-  analyses.value.slice(0, 5).sort((a, b) =>
-    new Date(b.analysisDate).getTime() - new Date(a.analysisDate).getTime()
-  )
-);
+const recentAnalyses = computed(() => {
+  if (!analyses.value || analyses.value.length === 0) return [];
+  return analyses.value.slice(0, 5).sort((a, b) =>
+    new Date(b.analysisDate || 0).getTime() - new Date(a.analysisDate || 0).getTime()
+  );
+});
 
 const lineChartData = computed(() => {
+  if (!analyses.value || analyses.value.length === 0) {
+    return { labels: [], datasets: [] };
+  }
+  
   const sortedAnalyses = [...analyses.value].sort((a, b) =>
-    new Date(a.commitDate).getTime() - new Date(b.commitDate).getTime()
+    new Date(a.commitDate || 0).getTime() - new Date(b.commitDate || 0).getTime()
   );
 
   return {
@@ -115,7 +109,7 @@ const lineChartData = computed(() => {
     datasets: [
       {
         label: 'Nota Geral',
-        data: sortedAnalyses.map((a) => a.overallNote),
+        data: sortedAnalyses.map((a) => a.overallNote || 0),
         borderColor: 'rgba(68, 123, 218, 1)',
         backgroundColor: 'rgba(68, 123, 218, 0.1)',
       },
@@ -124,23 +118,35 @@ const lineChartData = computed(() => {
 });
 
 const languageChartData = computed(() => {
-  const languageCount: Record<string, number> = {};
-  analyses.value.forEach((a) => {
-    languageCount[a.language] = (languageCount[a.language] || 0) + 1;
-  });
+  if (!languageFrequency.value || languageFrequency.value.length === 0) {
+    return { labels: [], datasets: [] };
+  }
 
   return {
-    labels: Object.keys(languageCount),
+    labels: languageFrequency.value.map((item) => item.language),
     datasets: [
       {
-        label: 'Quantidade',
-        data: Object.values(languageCount),
+        label: 'Quantidade de Arquivos',
+        data: languageFrequency.value.map((item) => item.count),
         backgroundColor: [
-          'rgba(68, 123, 218, 0.6)',
-          'rgba(75, 192, 192, 0.6)',
-          'rgba(255, 206, 86, 0.6)',
-          'rgba(153, 102, 255, 0.6)',
-          'rgba(255, 159, 64, 0.6)',
+          'rgba(68, 123, 218, 0.8)',
+          'rgba(75, 192, 192, 0.8)',
+          'rgba(255, 206, 86, 0.8)',
+          'rgba(153, 102, 255, 0.8)',
+          'rgba(255, 159, 64, 0.8)',
+          'rgba(255, 99, 132, 0.8)',
+          'rgba(54, 162, 235, 0.8)',
+          'rgba(255, 159, 64, 0.8)',
+        ],
+        borderColor: [
+          'rgba(68, 123, 218, 1)',
+          'rgba(75, 192, 192, 1)',
+          'rgba(255, 206, 86, 1)',
+          'rgba(153, 102, 255, 1)',
+          'rgba(255, 159, 64, 1)',
+          'rgba(255, 99, 132, 1)',
+          'rgba(54, 162, 235, 1)',
+          'rgba(255, 159, 64, 1)',
         ],
       },
     ],
@@ -183,8 +189,28 @@ const loadAnalyses = async () => {
   }
 };
 
+const loadStatistics = async () => {
+  try {
+    const { result, error } = await analysisService.getAnalysisStatistics();
+    
+    if (error.value) {
+      console.error('Erro ao carregar estatísticas:', error.value);
+    } else if (result.value) {
+      commitCount.value = result.value.total || 0;
+      averageNote.value = result.value.averageNote || 0;
+      uniqueFilesCount.value = result.value.uniqueFilesCount || 0;
+      totalSuggestions.value = result.value.totalSuggestions || 0;
+      languageFrequency.value = result.value.languageFrequency || [];
+    }
+  } catch (err) {
+    console.error('Erro ao carregar estatísticas:', err);
+  }
+};
+
 onMounted(() => {
+  initTheme();
   loadAnalyses();
+  loadStatistics();
 });
 </script>
 
@@ -193,20 +219,53 @@ onMounted(() => {
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
+  min-height: 100vh;
 }
 
 .dashboard-header {
   margin-bottom: 2rem;
 
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
   h1 {
     font-size: 2.5rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
+    transition: color 0.3s ease;
   }
 
   p {
     font-size: 1.1rem;
-    color: #7f8c8d;
+    color: var(--text-secondary);
+    transition: color 0.3s ease;
+  }
+}
+
+.theme-toggle {
+  background: var(--card-background);
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px var(--shadow-color);
+
+  &:hover {
+    transform: scale(1.1);
+    border-color: var(--primary-color);
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 }
 
@@ -218,22 +277,30 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
+  transition: all 0.3s ease;
 
   h3 {
     font-size: 0.9rem;
-    color: #7f8c8d;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     text-transform: uppercase;
+    transition: color 0.3s ease;
   }
 
   .stat-value {
     font-size: 2.5rem;
     font-weight: bold;
-    color: #447bda;
+    color: var(--primary-color);
+    transition: color 0.3s ease;
+  }
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px var(--shadow-color);
   }
 }
 
@@ -245,15 +312,31 @@ onMounted(() => {
 }
 
 .chart-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  min-height: 400px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  height: 450px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
 
   h3 {
     margin-bottom: 1rem;
-    color: #2c3e50;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    transition: color 0.3s ease;
+  }
+
+  .chart-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px var(--shadow-color);
   }
 }
 
