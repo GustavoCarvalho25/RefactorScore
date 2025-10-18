@@ -11,6 +11,7 @@ public class CleanCodeRatingBuilder
     private int _noNeedsComments = 9;
     private int _methodCohesion = 8;
     private int _deadCode = 10;
+    
     private Dictionary<string, string> _justifications = new();
 
     public static CleanCodeRatingBuilder Create() => new();
@@ -31,6 +32,8 @@ public class CleanCodeRatingBuilder
             ["MethodCohesion"] = _faker.Lorem.Sentence(),
             ["DeadCode"] = _faker.Lorem.Sentence()
         };
+        
+        
         
         return this;
     }

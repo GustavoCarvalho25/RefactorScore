@@ -13,9 +13,6 @@ public static class MongoDbMapper
             BsonClassMap.RegisterClassMap<CleanCodeRating>(cm =>
             {
                 cm.AutoMap();
-                
-                cm.UnmapProperty(r => r.Note);
-                cm.UnmapProperty(r => r.Quality);
             });
         }
 
