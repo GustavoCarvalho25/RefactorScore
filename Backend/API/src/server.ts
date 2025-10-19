@@ -173,13 +173,78 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
         ? suggestionsAgg[0].count 
         : 0;
 
+      // Buscar commits individuais com suas notas para gráfico de evolução
+      const commitsPipeline: any[] = [];
+      if (commitIds.length > 0) {
+        commitsPipeline.push({ $match: { _id: { $in: commitIds } } });
+      }
+      commitsPipeline.push(
+        {
+          $project: {
+            _id: 1,
+            commitId: { $ifNull: ['$CommitId', '$commitId'] },
+            author: { $ifNull: ['$Author', '$author'] },
+            commitDate: { $ifNull: ['$CommitDate', '$commitDate'] },
+            analysisDate: { $ifNull: ['$AnalysisDate', '$analysisDate'] },
+            language: { $ifNull: ['$Language', '$language'] },
+            note: {
+              $ifNull: [
+                '$OverallNote', 
+                      { $ifNull: [
+                            '$overallNote', 
+                                   0 
+    ]}
+]
+            },
+            quality: {
+              $ifNull: [
+                '$Rating.Quality',
+                { $ifNull: ['$rating.quality', 'Unknown'] }
+              ]
+            }
+          }
+        },
+        { $sort: { commitDate: 1 } } // Ordena por data para mostrar evolução temporal
+      );
+
+      const commitsAgg = await collection.aggregate(commitsPipeline).toArray();
+      const commitsEvolution = commitsAgg.map((commit: any) => {
+        // Extrair data do formato {"$date": "..."} se necessário
+        const extractDate = (dateField: any) => {
+          if (!dateField) return null;
+          if (typeof dateField === 'string') return dateField;
+          if (dateField.$date) return dateField.$date;
+          if (dateField instanceof Date) return dateField.toISOString();
+          return dateField;
+        };
+
+        return {
+          id: commit._id,
+          commitId: commit.commitId || null,
+          author: commit.author || 'Unknown',
+          commitDate: extractDate(commit.commitDate),
+          analysisDate: extractDate(commit.analysisDate),
+          language: commit.language || 'Unknown',
+          note: commit.note || 0,
+          quality: commit.quality || 'Unknown'
+        };
+      });
+
+      // Calcular melhor e pior nota
+      const notasValidas = commitsEvolution.map(c => c.note).filter(n => n > 0);
+      const bestNote = notasValidas.length > 0 ? Math.max(...notasValidas) : 0;
+      const worstNote = notasValidas.length > 0 ? Math.min(...notasValidas) : 0;
+
       res.json({ 
         success: true, 
         total, 
-        averageNote, 
+        averageNote,
+        bestNote,
+        worstNote,
         uniqueFilesCount, 
         languageFrequency,
-        totalSuggestions
+        totalSuggestions,
+        commitsEvolution
       });
     } catch (error: any) {
       // On error, send a single 500 response. Do not reference `collection` here because it may be undefined.

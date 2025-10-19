@@ -10,6 +10,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import BaseChart from './BaseChart.vue';
+import { useTheme } from '../../composables/useTheme';
 
 interface Props {
   chartId: string;
@@ -26,6 +27,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: 'Doughnut Chart',
 });
+
+const { isDark } = useTheme();
 
 const chartData = computed(() => ({
   labels: props.labels,
@@ -50,21 +53,33 @@ const chartData = computed(() => ({
   })),
 }));
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top' as const,
-    },
-    title: {
-      display: true,
-      text: props.title,
-      font: {
-        size: 16,
+const chartOptions = computed(() => {
+  // Usa isDark.value para reagir às mudanças de tema
+  const textColor = isDark.value ? '#ffffff' : '#2c3e50';
+  
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          color: textColor,
+          font: {
+            size: 12,
+          },
+        },
+      },
+      title: {
+        display: true,
+        text: props.title,
+        color: textColor,
+        font: {
+          size: 16,
+        },
       },
     },
-  },
-}));
+  };
+});
 </script>
 

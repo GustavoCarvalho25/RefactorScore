@@ -34,20 +34,23 @@
 
     <div class="dashboard-charts">
       <div class="chart-card">
-        <h3>Evolução da Qualidade</h3>
         <div class="chart-wrapper">
           <LineChart
             v-if="lineChartData.labels.length > 0"
             chart-id="quality-evolution"
             :labels="lineChartData.labels"
             :datasets="lineChartData.datasets"
-            title="Nota ao Longo do Tempo"
+            :y-axis-step-size="1"
+            :y-axis-max="10"
+            title="Evolução das Notas dos Commits ao Longo do Tempo"
           />
+          <div v-else class="no-data">
+            <p>Sem dados para exibir</p>
+          </div>
         </div>
       </div>
 
       <div class="chart-card">
-        <h3>Distribuição por Linguagem</h3>
         <div class="chart-wrapper">
           <PieChart
             v-if="languageChartData.labels.length > 0"
@@ -56,6 +59,9 @@
             :datasets="languageChartData.datasets"
             title="Distribuição de Arquivos por Linguagem"
           />
+          <div v-else class="no-data">
+            <p>Sem dados para exibir</p>
+          </div>
         </div>
       </div>
     </div>
@@ -82,36 +88,29 @@ const commitCount = ref<number>(0);
 const averageNote = ref<number>(0);
 const uniqueFilesCount = ref<number>(0);
 const totalSuggestions = ref<number>(0);
+const bestNote = ref<number>(0);
+const worstNote = ref<number>(0);
 const languageFrequency = ref<{ language: string; count: number }[]>([]);
-const totalAnalyses = computed(() => analyses.value.length);
-const totalFiles = computed(() =>
-  analyses.value.reduce((acc, a) => acc + (a.files?.length || 0), 0)
-);
-
-const recentAnalyses = computed(() => {
-  if (!analyses.value || analyses.value.length === 0) return [];
-  return analyses.value.slice(0, 5).sort((a, b) =>
-    new Date(b.analysisDate || 0).getTime() - new Date(a.analysisDate || 0).getTime()
-  );
-});
+const commitsEvolution = ref<any[]>([]);
 
 const lineChartData = computed(() => {
-  if (!analyses.value || analyses.value.length === 0) {
+  if (!commitsEvolution.value || commitsEvolution.value.length === 0) {
     return { labels: [], datasets: [] };
   }
   
-  const sortedAnalyses = [...analyses.value].sort((a, b) =>
+  // Ordenar commits por data
+  const sortedCommits = [...commitsEvolution.value].sort((a, b) =>
     new Date(a.commitDate || 0).getTime() - new Date(b.commitDate || 0).getTime()
   );
 
   return {
-    labels: sortedAnalyses.map((a) => formatDate(a.commitDate)),
+    labels: sortedCommits.map((commit) => formatDate(commit.commitDate)),
     datasets: [
       {
-        label: 'Nota Geral',
-        data: sortedAnalyses.map((a) => a.overallNote || 0),
+        label: 'Nota do Commit',
+        data: sortedCommits.map((commit) => commit.note || 0),
         borderColor: 'rgba(68, 123, 218, 1)',
-        backgroundColor: 'rgba(68, 123, 218, 0.1)',
+        backgroundColor: 'rgba(68, 123, 218, 0.2)',
       },
     ],
   };
@@ -201,6 +200,7 @@ const loadStatistics = async () => {
       uniqueFilesCount.value = result.value.uniqueFilesCount || 0;
       totalSuggestions.value = result.value.totalSuggestions || 0;
       languageFrequency.value = result.value.languageFrequency || [];
+      commitsEvolution.value = result.value.commitsEvolution || [];
     }
   } catch (err) {
     console.error('Erro ao carregar estatísticas:', err);
@@ -332,12 +332,24 @@ onMounted(() => {
     flex: 1;
     min-height: 0;
     position: relative;
+    width: 100%;
+    height: 100%;
   }
 
   &:hover {
     transform: translateY(-4px);
     box-shadow: 0 4px 12px var(--shadow-color);
   }
+}
+
+.no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
 }
 
 .recent-analyses {

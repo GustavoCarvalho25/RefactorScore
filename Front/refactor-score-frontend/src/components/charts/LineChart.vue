@@ -22,13 +22,17 @@ interface Props {
     backgroundColor?: string;
   }[];
   title?: string;
+  yAxisStepSize?: number;
+  yAxisMax?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: 'Line Chart',
+  yAxisStepSize: undefined,
+  yAxisMax: undefined,
 });
 
-const { themeChangeCounter } = useTheme();
+const { isDark } = useTheme();
 
 const chartData = computed(() => ({
   labels: props.labels,
@@ -43,12 +47,29 @@ const chartData = computed(() => ({
 }));
 
 const chartOptions = computed(() => {
-  // Força a recomputação quando o tema muda
-  themeChangeCounter.value;
+  // Usa isDark.value para reagir às mudanças de tema
+  const textColor = isDark.value ? '#ffffff' : '#2c3e50';
+  const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
   
-  const isDarkMode = document.documentElement.classList.contains('dark-mode');
-  const textColor = isDarkMode ? '#eaeaea' : '#2c3e50';
-  const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+  const yAxisConfig: any = {
+    beginAtZero: true,
+    ticks: {
+      color: textColor,
+    },
+    grid: {
+      color: gridColor,
+    },
+  };
+
+  // Adiciona stepSize se fornecido
+  if (props.yAxisStepSize) {
+    yAxisConfig.ticks.stepSize = props.yAxisStepSize;
+  }
+
+  // Adiciona max se fornecido
+  if (props.yAxisMax !== undefined) {
+    yAxisConfig.max = props.yAxisMax;
+  }
   
   return {
     responsive: true,
@@ -74,15 +95,7 @@ const chartOptions = computed(() => {
       },
     },
     scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          color: textColor,
-        },
-        grid: {
-          color: gridColor,
-        },
-      },
+      y: yAxisConfig,
       x: {
         ticks: {
           color: textColor,

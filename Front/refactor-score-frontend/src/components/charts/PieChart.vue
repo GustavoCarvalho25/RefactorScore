@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: 'Pie Chart',
 });
 
-const { themeChangeCounter } = useTheme();
+const { isDark } = useTheme();
 
 const chartData = computed(() => ({
   labels: props.labels,
@@ -54,11 +54,8 @@ const chartData = computed(() => ({
 }));
 
 const chartOptions = computed(() => {
-  // Força a recomputação quando o tema muda
-  themeChangeCounter.value;
-  
-  const isDarkMode = document.documentElement.classList.contains('dark-mode');
-  const textColor = isDarkMode ? '#eaeaea' : '#2c3e50';
+  // Usa isDark.value para reagir às mudanças de tema
+  const textColor = isDark.value ? '#ffffff' : '#2c3e50';
   
   return {
     responsive: true,

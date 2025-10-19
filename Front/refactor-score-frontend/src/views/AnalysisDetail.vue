@@ -217,10 +217,12 @@ onMounted(() => {
   text-align: center;
   padding: 3rem;
   font-size: 1.1rem;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
 }
 
 .error {
-  color: #e74c3c;
+  color: var(--danger-color);
 }
 
 .detail-header {
@@ -229,7 +231,7 @@ onMounted(() => {
   .back-button {
     background: none;
     border: none;
-    color: #447bda;
+    color: var(--primary-color);
     font-size: 1rem;
     cursor: pointer;
     padding: 0.5rem 0;
@@ -237,14 +239,15 @@ onMounted(() => {
     transition: color 0.3s ease;
 
     &:hover {
-      color: #2c5aa0;
+      opacity: 0.8;
     }
   }
 
   h1 {
     font-size: 2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
+    transition: color 0.3s ease;
   }
 
   .meta-info {
@@ -255,16 +258,18 @@ onMounted(() => {
 
     .author {
       font-weight: 500;
-      color: #2c3e50;
+      color: var(--text-primary);
+      transition: color 0.3s ease;
     }
 
     .date {
-      color: #7f8c8d;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
     }
 
     .language-badge {
       padding: 0.25rem 0.75rem;
-      background: #447bda;
+      background: var(--primary-color);
       color: white;
       border-radius: 12px;
       font-size: 0.85rem;
@@ -284,16 +289,18 @@ onMounted(() => {
 }
 
 .overall-score {
-  background: white;
+  background: var(--card-background);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   text-align: center;
+  transition: all 0.3s ease;
 
   h2 {
     font-size: 1.2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 
   .score-value {
@@ -316,46 +323,51 @@ onMounted(() => {
 }
 
 .metric {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   text-align: center;
+  transition: all 0.3s ease;
 
   .metric-label {
     display: block;
     font-size: 0.85rem;
-    color: #7f8c8d;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     text-transform: uppercase;
+    transition: color 0.3s ease;
   }
 
   .metric-value {
     font-size: 2rem;
     font-weight: bold;
-    color: #2c3e50;
+    color: var(--text-primary);
+    transition: color 0.3s ease;
 
     &.added {
-      color: #27ae60;
+      color: var(--success-color);
     }
 
     &.removed {
-      color: #e74c3c;
+      color: var(--danger-color);
     }
   }
 }
 
 .rating-chart {
-  background: white;
+  background: var(--card-background);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   margin-bottom: 2rem;
   min-height: 500px;
+  transition: all 0.3s ease;
 
   h2 {
     margin-bottom: 1rem;
-    color: #2c3e50;
+    color: var(--text-primary);
+    transition: color 0.3s ease;
   }
 }
 
@@ -365,8 +377,9 @@ onMounted(() => {
 
   h2 {
     font-size: 1.5rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 }
 
@@ -377,14 +390,15 @@ onMounted(() => {
 }
 
 .file-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  border-left: 4px solid var(--border-color);
+  transition: all 0.3s ease;
 
   &.has-analysis {
-    border-left-color: #447bda;
+    border-left-color: var(--primary-color);
   }
 
   .file-header {
@@ -395,16 +409,18 @@ onMounted(() => {
 
     h3 {
       font-size: 1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       font-family: monospace;
+      transition: color 0.3s ease;
     }
 
     .file-language {
       padding: 0.25rem 0.75rem;
-      background: #f8f9fa;
+      background: var(--light-gray);
       border-radius: 12px;
       font-size: 0.85rem;
-      color: #7f8c8d;
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
     }
   }
 
@@ -417,11 +433,11 @@ onMounted(() => {
       font-weight: 500;
 
       &.added {
-        color: #27ae60;
+        color: var(--success-color);
       }
 
       &.removed {
-        color: #e74c3c;
+        color: var(--danger-color);
       }
     }
   }
@@ -431,16 +447,18 @@ onMounted(() => {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 0.5rem;
     padding-top: 1rem;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-color);
 
     .rating-item {
       display: flex;
       justify-content: space-between;
       font-size: 0.9rem;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
 
       .rating-value {
         font-weight: bold;
-        color: #447bda;
+        color: var(--primary-color);
       }
     }
   }
@@ -453,22 +471,23 @@ onMounted(() => {
 }
 
 .suggestion-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  border-left: 4px solid var(--border-color);
+  transition: all 0.3s ease;
 
   &.priority-high {
-    border-left-color: #e74c3c;
+    border-left-color: var(--danger-color);
   }
 
   &.priority-medium {
-    border-left-color: #f39c12;
+    border-left-color: var(--warning-color);
   }
 
   &.priority-low {
-    border-left-color: #3498db;
+    border-left-color: var(--info-color);
   }
 
   .suggestion-header {
@@ -479,8 +498,9 @@ onMounted(() => {
 
     h3 {
       font-size: 1.1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       flex: 1;
+      transition: color 0.3s ease;
     }
 
     .suggestion-badges {
@@ -514,9 +534,10 @@ onMounted(() => {
   }
 
   .suggestion-description {
-    color: #7f8c8d;
+    color: var(--text-secondary);
     line-height: 1.6;
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 
   .suggestion-footer {
@@ -524,21 +545,24 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding-top: 1rem;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-color);
     font-size: 0.85rem;
 
     .file-ref {
-      color: #7f8c8d;
+      color: var(--text-secondary);
       font-family: monospace;
+      transition: color 0.3s ease;
     }
 
     .resources {
       display: flex;
       gap: 0.5rem;
       align-items: center;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
 
       .resource-link {
-        color: #447bda;
+        color: var(--primary-color);
         text-decoration: none;
 
         &:hover {
