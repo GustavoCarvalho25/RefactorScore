@@ -1,5 +1,7 @@
 import { useFetch, Service, HttpResponse } from '../../composables/useFetch';
 import type { CommitAnalysis } from '../../interfaces/CommitAnalysis';
+import type { Statistics } from '../../interfaces/Statistics';
+import type { ApiResponse } from '../../interfaces/ApiResponse';
 
 export function useAnalysisService() {
   const { fetchData, error, result, loading } = useFetch(Service.Analysis);
@@ -12,7 +14,7 @@ export function useAnalysisService() {
     };
   };
 
-  const getAnalysisById = async (id: string): Promise<HttpResponse<CommitAnalysis>> => {
+  const getAnalysisById = async (id: string): Promise<HttpResponse<ApiResponse<CommitAnalysis[]>>> => {
     await fetchData('get', `/${id}`);
     return {
       error,
@@ -28,8 +30,13 @@ export function useAnalysisService() {
     };
   };
 
-  const getAnalysisStatistics = async (): Promise<HttpResponse<any>> => {
-    await fetchData('get', '');
+  const getAnalysisStatistics = async (startDate?: string, endDate?: string): Promise<HttpResponse<Statistics>> => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    const queryString = params.toString();
+    await fetchData('get', queryString ? `/?${queryString}` : '/');
     return {
       error,
       result,

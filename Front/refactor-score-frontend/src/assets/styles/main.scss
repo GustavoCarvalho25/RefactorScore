@@ -44,11 +44,12 @@ body {
 }
 
 // Dark Mode Variables
-.dark-mode {
+[data-theme="dark"] {
   --background-color: #1a1a2e;
+  --nav-background: #16213e;
   --card-background: #16213e;
   --text-primary: #eaeaea;
-  --text-secondary:  #ffffff;
+  --text-secondary: #a0a0a0;
   --border-color: #2d3748;
   --dark-gray: #eaeaea;
   --light-gray: #2d3748;
