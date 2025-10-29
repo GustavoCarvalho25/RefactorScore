@@ -69,6 +69,10 @@ const chartOptions = computed(() => {
         ticks: {
           stepSize: 2,
           color: textColor,
+          backdropColor: isDark.value ? 'rgba(22, 33, 62, 0.95)' : '#ffffff',
+          font: {
+            weight: 'bold' as const
+          }
         },
         grid: {
           color: gridColor,
@@ -78,6 +82,9 @@ const chartOptions = computed(() => {
           font: {
             size: 12,
           },
+        },
+        angleLines: {
+          color: gridColor
         },
       },
     },

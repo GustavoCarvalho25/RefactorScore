@@ -12,8 +12,11 @@ import {
   ChartType,
   registerables,
 } from 'chart.js';
+import { useTheme } from '../../composables/useTheme';
 
 Chart.register(...registerables);
+
+const { isDark } = useTheme();
 
 interface Props {
   chartId: string;
@@ -35,10 +38,41 @@ const createChart = () => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const defaultOptions = {
+    plugins: {
+      legend: {
+        labels: {
+          color: isDark.value ? '#ffffff' : '#2c3e50'
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: isDark.value ? '#a0a0a0' : '#7f8c8d'
+        },
+        grid: {
+          color: isDark.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
+      },
+      y: {
+        ticks: {
+          color: isDark.value ? '#a0a0a0' : '#7f8c8d'
+        },
+        grid: {
+          color: isDark.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
+      }
+    }
+  };
+
   chartInstance.value = new Chart(ctx, {
     type: props.type,
     data: props.data,
-    options: props.options,
+    options: {
+      ...defaultOptions,
+      ...props.options,
+    },
   });
 };
 
@@ -85,6 +119,10 @@ watch(
   },
   { deep: true }
 );
+
+watch(isDark, () => {
+  recreateChart();
+});
 </script>
 
 <style scoped lang="scss">

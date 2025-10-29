@@ -62,23 +62,39 @@ const chartOptions = computed(() => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'top' as const,
+        position: 'bottom' as const,
         labels: {
           color: textColor,
           font: {
-            size: 12,
+            size: 11,
           },
+          boxWidth: 15,
+          padding: 10
         },
       },
       title: {
-        display: true,
-        text: props.title,
-        color: textColor,
-        font: {
-          size: 16,
-        },
+        display: false,
       },
     },
+    scales: {
+      x: {
+        display: false,
+        grid: {
+          display: false
+        }
+      },
+      y: {
+        display: false,
+        grid: {
+          display: false
+        }
+      }
+    },
+    elements: {
+      arc: {
+        borderWidth: 0
+      }
+    }
   };
 });
 </script>
