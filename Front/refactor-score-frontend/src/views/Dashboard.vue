@@ -6,61 +6,72 @@
           <h1>RefactorScore Dashboard</h1>
           <p>Análise de Commits com Clean Code</p>
         </div>
-        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Modo Claro' : 'Modo Escuro'">
-          <span v-if="isDark">☀️</span>
-          <span v-else>🌙</span>
-        </button>
       </div>
     </header>
 
-    <div class="dashboard-stats">
-      <div class="stat-card">
-        <h3>Total de Análises</h3>
-        <p class="stat-value">{{ commitCount }}</p>
-      </div>
-      <div class="stat-card">
-        <h3>Nota Média</h3>
-        <p class="stat-value">{{ averageNote }}</p>
-      </div>
-      <div class="stat-card">
-        <h3>Arquivos Analisados</h3>
-        <p class="stat-value">{{ uniqueFilesCount }}</p>
-      </div>
-      <div class="stat-card">
-        <h3>Sugestões Geradas</h3>
-        <p class="stat-value">{{ totalSuggestions }}</p>
-      </div>
-    </div>
-
-    <div class="dashboard-charts">
-      <div class="chart-card">
-        <div class="chart-wrapper">
-          <LineChart
-            v-if="lineChartData.labels.length > 0"
-            chart-id="quality-evolution"
-            :labels="lineChartData.labels"
-            :datasets="lineChartData.datasets"
-            :y-axis-step-size="1"
-            :y-axis-max="10"
-            title="Evolução das Notas dos Commits ao Longo do Tempo"
-          />
-          <div v-else class="no-data">
-            <p>Sem dados para exibir</p>
+    <div class="dashboard-content">
+      <div class="stats-section">
+        <div class="dashboard-stats">
+          <div class="stat-card">
+            <h3>Total de Análises</h3>
+            <p class="stat-value">{{ commitCount }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Nota Média</h3>
+            <p class="stat-value">{{ averageNote }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Arquivos Analisados</h3>
+            <p class="stat-value">{{ uniqueFilesCount }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Sugestões Geradas</h3>
+            <p class="stat-value">{{ totalSuggestions }}</p>
+          </div>
+        </div>
+        
+        <div class="language-distribution-card">
+          <div class="chart-wrapper" style="height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;">
+            <StackedBarChart
+              v-if="stackedLanguageChartData.labels.length > 0"
+              chart-id="language-distribution-stacked"
+              :labels="stackedLanguageChartData.labels"
+              :datasets="stackedLanguageChartData.datasets"
+              title="Distribuição de Arquivos por Linguagem"
+            />
+            <div v-else class="no-data">
+              <p>Sem dados para exibir</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card full-width">
+        <div class="filter-controls">
+          <label for="startDate">Data Início:</label>
+          <input id="startDate" type="date" v-model="filterStartDate" class="date-input" />
+          
+          <label for="endDate">Data Fim:</label>
+          <input id="endDate" type="date" v-model="filterEndDate" class="date-input" />
+        </div>
         <div class="chart-wrapper">
-          <PieChart
-            v-if="languageChartData.labels.length > 0"
-            chart-id="language-distribution"
-            :labels="languageChartData.labels"
-            :datasets="languageChartData.datasets"
-            title="Distribuição de Arquivos por Linguagem"
-          />
-          <div v-else class="no-data">
-            <p>Sem dados para exibir</p>
+          <div class="chart-container" style="position: relative; height: 100%; width: 100%;">
+            <template v-if="commitsEvolution && commitsEvolution.length > 0">
+              <LineChart
+                :key="chartKey"
+                :chart-id="`quality-evolution-${chartKey}`"
+                :labels="lineChartData.labels"
+                :datasets="lineChartData.datasets"
+                :y-axis-step-size="1"
+                :y-axis-max="10"
+                title="Evolução das Notas dos Commits ao Longo do Tempo"
+              />
+            </template>
+            <template v-else>
+              <div class="no-data">
+                <p>Sem dados para exibir</p>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -69,19 +80,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue'; // Adicionado 'watch'
 import { useRouter } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
+import { useDashboardService } from '../server/api/dashboardService';
 import { useAnalysisService } from '../server/api/analysisService';
-import { useTheme } from '../composables/useTheme';
 import LineChart from '../components/charts/LineChart.vue';
-import BarChart from '../components/charts/BarChart.vue';
-import PieChart from '../components/charts/PieChart.vue';
+import StackedBarChart from '../components/charts/StackedBarChart.vue';
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
+const dashboardService = useDashboardService();
 const analysisService = useAnalysisService();
-const { isDark, toggleTheme, initTheme } = useTheme();
+
+interface CommitEvolution {
+  commitDate: string;
+  note: number;
+}
+
+interface LanguageFrequency {
+  language: string;
+  count: number;
+}
 
 const analyses = ref<any[]>([]);
 const commitCount = ref<number>(0);
@@ -90,71 +110,179 @@ const uniqueFilesCount = ref<number>(0);
 const totalSuggestions = ref<number>(0);
 const bestNote = ref<number>(0);
 const worstNote = ref<number>(0);
-const languageFrequency = ref<{ language: string; count: number }[]>([]);
-const commitsEvolution = ref<any[]>([]);
+const languageFrequency = ref<LanguageFrequency[]>([]);
+const commitsEvolution = ref<CommitEvolution[]>([]);
 
+// REFS PARA O FILTRO DE DATA
+const filterStartDate = ref<string>('');
+const filterEndDate = ref<string>('');
+
+// LÓGICA DO GRÁFICO DE LINHA (INCLUINDO FILTRO)
+// Referência para forçar recriação do gráfico
+const chartKey = ref(0);
+
+// Computed para processar os dados do gráfico
 const lineChartData = computed(() => {
   if (!commitsEvolution.value || commitsEvolution.value.length === 0) {
     return { labels: [], datasets: [] };
   }
-  
-  // Ordenar commits por data
-  const sortedCommits = [...commitsEvolution.value].sort((a, b) =>
-    new Date(a.commitDate || 0).getTime() - new Date(b.commitDate || 0).getTime()
-  );
 
-  return {
-    labels: sortedCommits.map((commit) => formatDate(commit.commitDate)),
-    datasets: [
-      {
-        label: 'Nota do Commit',
-        data: sortedCommits.map((commit) => commit.note || 0),
-        borderColor: 'rgba(68, 123, 218, 1)',
-        backgroundColor: 'rgba(68, 123, 218, 0.2)',
+  try {
+    // 1. Preparar dados
+    let commits = [...commitsEvolution.value];
+    
+    // 2. Aplicar filtros de data
+    if (filterStartDate.value || filterEndDate.value) {
+      // Função para converter data para o formato YYYY-MM-DD
+      const formatDate = (dateString: string) => {
+        try {
+          const date = new Date(dateString);
+          return date.toISOString().split('T')[0];
+        } catch (error) {
+          console.error('Erro ao formatar data:', dateString, error);
+          return '';
+        }
+      };
+
+      // Converter datas do filtro para YYYY-MM-DD
+      const startDate = filterStartDate.value ? formatDate(filterStartDate.value) : '';
+      const endDate = filterEndDate.value ? formatDate(filterEndDate.value) : '';
+
+      // Debug das datas do filtro
+      console.log('Datas do filtro:', {
+        startDateOriginal: filterStartDate.value,
+        endDateOriginal: filterEndDate.value,
+        startDateFormatted: startDate,
+        endDateFormatted: endDate
+      });
+
+      commits = commits.filter(commit => {
+        // Converter a data do commit para YYYY-MM-DD
+        const commitDate = formatDate(commit.commitDate);
+        if (!commitDate) return false; // Ignora commits com data inválida
+
+        // Verificar se está no intervalo
+        const isAfterStart = !startDate || commitDate >= startDate;
+        const isBeforeEnd = !endDate || commitDate <= endDate;
+        const isInRange = isAfterStart && isBeforeEnd;
+        
+        // Log detalhado para cada commit
+        console.log(`Avaliando commit:`, {
+          commitOriginal: commit.commitDate,
+          commitFormatado: commitDate,
+          dataInicio: startDate || 'sem limite',
+          dataFim: endDate || 'sem limite',
+          isAfterStart,
+          isBeforeEnd,
+          incluido: isInRange
+        });
+        
+        return isInRange;
+      });
+
+      // Ordenar commits após a filtragem
+      commits.sort((a, b) => {
+        const dateA = new Date(a.commitDate).getTime();
+        const dateB = new Date(b.commitDate).getTime();
+        return dateA - dateB;
+      });
+
+      // Log do resultado final
+      console.log('Resultado da filtragem:', {
+        totalCommits: commitsEvolution.value.length,
+        commitsFiltrados: commits.length,
+        intervalo: {
+          inicio: startDate || 'sem limite',
+          fim: endDate || 'sem limite'
+        },
+        primeiroCommit: commits.length > 0 && commits[0]?.commitDate ? 
+          formatDate(commits[0].commitDate) : 'nenhum',
+        ultimoCommit: commits.length > 0 && commits[commits.length - 1]?.commitDate ? 
+          formatDate(commits[commits.length - 1]?.commitDate || '') : 'nenhum'
+      });
+    }
+
+    // 3. Ordenar por data
+    commits.sort((a, b) => new Date(a.commitDate).getTime() - new Date(b.commitDate).getTime());
+
+    // 4. Preparar dados para o gráfico
+    const dates = commits.map(commit => formatDate(commit.commitDate));
+    const notes = commits.map(commit => commit.note);
+
+    // Log para debug
+    console.log('Dados processados:', {
+      totalCommits: commitsEvolution.value.length,
+      filteredCommits: commits.length,
+      dateRange: {
+        start: filterStartDate.value,
+        end: filterEndDate.value
       },
-    ],
-  };
+      datas: dates,
+      notas: notes
+    });
+
+    // 5. Retornar dados formatados para o gráfico
+    return {
+      labels: dates,
+      datasets: [
+        {
+          label: 'Nota do Commit',
+          data: notes,
+          borderColor: 'rgba(68, 123, 218, 1)',
+          backgroundColor: 'rgba(68, 123, 218, 0.2)',
+          fill: true,
+          tension: 0.4,
+        }
+      ]
+    };
+  } catch (error) {
+    console.error('Erro ao processar dados:', error);
+    return { labels: [], datasets: [] };
+  }
 });
 
-const languageChartData = computed(() => {
+// Transforma a distribuição por linguagem em um único gráfico de barras empilhadas
+const stackedLanguageChartData = computed(() => {
   if (!languageFrequency.value || languageFrequency.value.length === 0) {
     return { labels: [], datasets: [] };
   }
 
-  return {
-    labels: languageFrequency.value.map((item) => item.language),
-    datasets: [
-      {
-        label: 'Quantidade de Arquivos',
-        data: languageFrequency.value.map((item) => item.count),
-        backgroundColor: [
-          'rgba(68, 123, 218, 0.8)',
-          'rgba(75, 192, 192, 0.8)',
-          'rgba(255, 206, 86, 0.8)',
-          'rgba(153, 102, 255, 0.8)',
-          'rgba(255, 159, 64, 0.8)',
-          'rgba(255, 99, 132, 0.8)',
-          'rgba(54, 162, 235, 0.8)',
-          'rgba(255, 159, 64, 0.8)',
-        ],
-        borderColor: [
-          'rgba(68, 123, 218, 1)',
-          'rgba(75, 192, 192, 1)',
-          'rgba(255, 206, 86, 1)',
-          'rgba(153, 102, 255, 1)',
-          'rgba(255, 159, 64, 1)',
-          'rgba(255, 99, 132, 1)',
-          'rgba(54, 162, 235, 1)',
-          'rgba(255, 159, 64, 1)',
-        ],
-      },
-    ],
-  };
+  const total = languageFrequency.value.reduce((acc, cur) => acc + (cur.count || 0), 0) || 1;
+
+  const colors = [
+    'rgba(68, 123, 218, 0.8)',
+    'rgba(75, 192, 192, 0.8)',
+    'rgba(255, 206, 86, 0.8)',
+    'rgba(153, 102, 255, 0.8)',
+    'rgba(255, 159, 64, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(201, 203, 207, 0.8)'
+  ];
+
+  // labels: apenas uma categoria para a barra empilhada
+  const labels = [''];
+
+  const datasets = languageFrequency.value.map((item, idx) => ({
+    label: item.language,
+    // cada dataset precisa ter um array com o mesmo tamanho de labels (1)
+    data: [Math.round(((item.count || 0) / total) * 100)],
+    count: item.count || 0, // contagem original para o tooltip
+    backgroundColor: colors[idx % colors.length],
+    borderColor: (colors[idx % colors.length] as string).replace('0.8', '1'),
+    borderWidth: 1,
+  }));
+
+  return { labels, datasets };
 });
+
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
-  return date.toLocaleDateString('pt-BR');
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 };
 
 const getScoreClass = (score: number) => {
@@ -177,7 +305,7 @@ const loadAnalyses = async () => {
       console.error('Error loading analyses:', error.value);
       analysisStore.setError('Erro ao carregar análises');
     } else if (result.value) {
-      analyses.value = result.value.data || [];
+      analyses.value = result.value || [];
       analysisStore.setAnalyses(analyses.value);
     }
   } catch (err) {
@@ -188,28 +316,49 @@ const loadAnalyses = async () => {
   }
 };
 
+// FUNÇÃO ATUALIZADA PARA ACEITAR ARGUMENTOS DE FILTRO
 const loadStatistics = async () => {
   try {
-    const { result, error } = await analysisService.getAnalysisStatistics();
+    const { result, error } = await dashboardService.getDashboardStatistics();
     
     if (error.value) {
       console.error('Erro ao carregar estatísticas:', error.value);
-    } else if (result.value) {
+      return;
+    }
+
+    if (result.value) {
+      console.log('Dados recebidos:', result.value);
       commitCount.value = result.value.total || 0;
-      averageNote.value = result.value.averageNote || 0;
+      averageNote.value = Number(result.value.averageNote?.toFixed(2)) || 0;
       uniqueFilesCount.value = result.value.uniqueFilesCount || 0;
       totalSuggestions.value = result.value.totalSuggestions || 0;
       languageFrequency.value = result.value.languageFrequency || [];
       commitsEvolution.value = result.value.commitsEvolution || [];
+
+      console.log('Dados de evolução atualizados:', commitsEvolution.value);
+    } else {
+      console.error('Dados não encontrados na resposta da API');
     }
   } catch (err) {
     console.error('Erro ao carregar estatísticas:', err);
   }
 };
 
+// Observar mudanças nas datas do filtro
+watch([filterStartDate, filterEndDate], () => {
+  // Incrementar a chave para forçar a recriação do gráfico
+  chartKey.value++;
+  
+  console.log('Filtros atualizados, recriando gráfico...', {
+    startDate: filterStartDate.value,
+    endDate: filterEndDate.value,
+    newChartKey: chartKey.value
+  });
+});
+
 onMounted(() => {
-  initTheme();
   loadAnalyses();
+  // Carrega todas as estatísticas sem filtros
   loadStatistics();
 });
 </script>
@@ -245,29 +394,6 @@ onMounted(() => {
   }
 }
 
-.theme-toggle {
-  background: var(--card-background);
-  border: 2px solid var(--border-color);
-  border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 1.5rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px var(--shadow-color);
-
-  &:hover {
-    transform: scale(1.1);
-    border-color: var(--primary-color);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
 
 .dashboard-stats {
   display: grid;
@@ -304,11 +430,41 @@ onMounted(() => {
   }
 }
 
-.dashboard-charts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
-  margin-bottom: 2rem;
+}
+
+.stats-section {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.dashboard-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.language-distribution-card {
+  flex: 0.9;
+  background: var(--card-background);
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  min-height: auto;
+  height: 300px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+  }
 }
 
 .chart-card {
@@ -321,6 +477,15 @@ onMounted(() => {
   flex-direction: column;
   transition: all 0.3s ease;
 
+  &.full-width {
+    height: 550px;
+  }
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+  }
+  
   h3 {
     margin-bottom: 1rem;
     color: var(--text-primary);
@@ -335,12 +500,39 @@ onMounted(() => {
     width: 100%;
     height: 100%;
   }
+}
 
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px var(--shadow-color);
+// ESTILOS DO FILTRO DE DATA
+.filter-controls {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0 0.5rem;
+  flex-shrink: 0;
+  
+  label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .date-input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--background-color);
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+    
+    &:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(68, 123, 218, 0.2);
+      outline: none;
+    }
   }
 }
+// FIM ESTILOS DO FILTRO
 
 .no-data {
   display: flex;
@@ -352,62 +544,7 @@ onMounted(() => {
   font-size: 1.1rem;
 }
 
-.recent-analyses {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-
-  h3 {
-    margin-bottom: 1rem;
-    color: #2c3e50;
-  }
-}
-
-.analysis-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.analysis-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: #f8f9fa;
-    border-color: #447bda;
-  }
-
-  .analysis-info {
-    h4 {
-      font-size: 1rem;
-      color: #2c3e50;
-      margin-bottom: 0.25rem;
-    }
-
-    p {
-      font-size: 0.85rem;
-      color: #7f8c8d;
-    }
-  }
-
-  .analysis-score {
-    span {
-      font-size: 1.5rem;
-      font-weight: bold;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-    }
-  }
-}
-
+// ... (Restante dos estilos, incluindo .score-excellent, etc.)
 .score-excellent {
   color: #27ae60;
   background: rgba(39, 174, 96, 0.1);

@@ -4,51 +4,61 @@
 
     <div v-else-if="error" class="error">{{ error }}</div>
 
-    <div v-else-if="analysis" class="detail-content">
+    <div v-else-if="analyses.length > 0" class="detail-content">
       <header class="detail-header">
         <button @click="goBack" class="back-button">← Voltar</button>
         <div class="header-info">
-          <h1>Análise do Commit {{ analysis.commitId.substring(0, 8) }}</h1>
+          <h1>Análises de Commits</h1>
           <div class="meta-info">
-            <span class="author">{{ analysis.author }}</span>
-            <span class="date">{{ formatDate(analysis.commitDate) }}</span>
-            <span class="language-badge">{{ analysis.language }}</span>
+            <span class="total-commits">{{ analyses.length }} commits analisados</span>
           </div>
         </div>
       </header>
 
+      <!-- Container para cada commit -->
+      <div v-for="(analysis, index) in analyses" :key="analysis.id" class="commit-container">
+        <div class="analysis-container">
+          <div class="commit-header">
+            <h2>Commit {{ analysis.commitId ? analysis.commitId.substring(0, 8) : 'N/A' }}</h2>
+            <div class="commit-meta">
+              <span class="author" v-if="analysis.author">{{ analysis.author }}</span>
+              <span class="date" v-if="analysis.analysisDate">{{ formatDate(analysis.analysisDate) }}</span>
+              <span class="language-badge" v-if="getFirstLanguage(analysis)">{{ getFirstLanguage(analysis) }}</span>
+            </div>
+          </div>
+
       <div class="score-section">
-        <div class="overall-score" :class="getScoreClass(analysis.overallNote)">
+        <div class="overall-score" :class="getScoreClass(getOverallNote(analysis))">
           <h2>Nota Geral</h2>
-          <div class="score-value">{{ analysis.overallNote.toFixed(2) }}</div>
-          <div class="score-quality">{{ analysis.rating?.quality }}</div>
+          <div class="score-value">{{ getOverallNote(analysis).toFixed(2) }}</div>
+          <div class="score-quality">{{ getFirstFileRating(analysis)?.quality || 'N/A' }}</div>
         </div>
 
         <div class="metrics">
           <div class="metric">
             <span class="metric-label">Arquivos</span>
-            <span class="metric-value">{{ analysis.files.length }}</span>
+            <span class="metric-value">{{ getAnalysisFiles(analysis).length }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Linhas Adicionadas</span>
-            <span class="metric-value added">+{{ analysis.addedLines }}</span>
+            <span class="metric-value added">+{{ getTotalAddedLines(analysis) }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Linhas Removidas</span>
-            <span class="metric-value removed">-{{ analysis.removedLines }}</span>
+            <span class="metric-value removed">-{{ getTotalRemovedLines(analysis) }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Sugestões</span>
-            <span class="metric-value">{{ analysis.suggestions.length }}</span>
+            <span class="metric-value">{{ getAnalysisSuggestions(analysis).length }}</span>
           </div>
         </div>
       </div>
 
-      <div v-if="analysis.rating" class="rating-chart">
+      <div v-if="getFirstFileRating(analysis)" class="rating-chart">
         <h2>Avaliação Clean Code</h2>
         <RadarChart
-          chart-id="analysis-rating"
-          :rating="analysis.rating"
+          :chart-id="`analysis-rating-${analysis.id}`"
+          :rating="getFirstFileRating(analysis)!"
           title="Métricas de Qualidade"
         />
       </div>
@@ -57,10 +67,10 @@
         <h2>Arquivos Analisados</h2>
         <div class="files-list">
           <div
-            v-for="file in analysis.files"
-            :key="file.id"
+            v-for="file in getAnalysisFiles(analysis)"
+            :key="file.fileId || file.id"
             class="file-card"
-            :class="{ 'has-analysis': file.hasAnalysis }"
+            :class="{ 'has-analysis': file.rating }"
           >
             <div class="file-header">
               <h3>{{ file.path }}</h3>
@@ -70,7 +80,7 @@
               <span class="stat added">+{{ file.addedLines }}</span>
               <span class="stat removed">-{{ file.removedLines }}</span>
             </div>
-            <div v-if="file.hasAnalysis && file.rating" class="file-rating">
+            <div v-if="file.rating" class="file-rating">
               <div class="rating-item">
                 <span>Variable Naming:</span>
                 <span class="rating-value">{{ file.rating.variableNaming }}/10</span>
@@ -96,11 +106,11 @@
         </div>
       </div>
 
-      <div v-if="analysis.suggestions.length > 0" class="suggestions-section">
+      <div v-if="getAnalysisSuggestions(analysis).length > 0" class="suggestions-section">
         <h2>Sugestões de Melhoria</h2>
         <div class="suggestions-list">
           <div
-            v-for="(suggestion, index) in analysis.suggestions"
+            v-for="(suggestion, index) in getAnalysisSuggestions(analysis)"
             :key="index"
             class="suggestion-card"
             :class="`priority-${suggestion.priority.toLowerCase()}`"
@@ -116,16 +126,16 @@
             <p class="suggestion-description">{{ suggestion.description }}</p>
             <div class="suggestion-footer">
               <span class="file-ref">{{ suggestion.fileReference }}</span>
-              <div v-if="suggestion.studyResources.length > 0" class="resources">
+              <div v-if="suggestion.studyResources && suggestion.studyResources.length > 0" class="resources">
                 <span>Recursos:</span>
                 <a
                   v-for="(resource, idx) in suggestion.studyResources"
                   :key="idx"
-                  :href="resource"
-                  target="_blank"
+                  :href="typeof resource === 'string' && resource.startsWith('http') ? resource : '#'"
+                  :target="typeof resource === 'string' && resource.startsWith('http') ? '_blank' : undefined"
                   class="resource-link"
                 >
-                  Link {{ idx + 1 }}
+                  {{ typeof resource === 'string' && resource.startsWith('http') ? `Link ${idx + 1}` : resource }}
                 </a>
               </div>
             </div>
@@ -134,6 +144,7 @@
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script setup lang="ts">
@@ -141,15 +152,73 @@ import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
+import { Suggestion } from '../interfaces/Suggestion';
+import { ApiResponse } from '../interfaces/ApiResponse';
 import RadarChart from '../components/charts/RadarChart.vue';
 
 const router = useRouter();
 const route = useRoute();
 const analysisService = useAnalysisService();
 
-const analysis = ref<CommitAnalysis | null>(null);
+const analyses = ref<CommitAnalysis[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+
+const getFirstLanguage = (analysis: CommitAnalysis): string => {
+  const files = getAnalysisFiles(analysis);
+  return files[0]?.language || 'N/A';
+};
+
+const getOverallNote = (analysis: CommitAnalysis): number => {
+  // Usar o campo note diretamente da análise
+  if (typeof analysis.note === 'number') {
+    return analysis.note;
+  }
+  
+  return 0;
+};
+
+const getFirstFileRating = (analysis: CommitAnalysis) => {
+  if (analysis.filesDetails && analysis.filesDetails.length > 0) {
+    return analysis.filesDetails[0]?.rating;
+  }
+  if (analysis.files && analysis.files.length > 0) {
+    return analysis.files[0]?.rating;
+  }
+  return null;
+};
+
+const getAnalysisFiles = (analysis: CommitAnalysis) => {
+  return analysis.filesDetails || analysis.files || [];
+};
+
+const getAnalysisSuggestions = (analysis: CommitAnalysis) => {
+  // Agregador de sugestões de todos os arquivos
+  if (analysis.filesDetails) {
+    return analysis.filesDetails.reduce((allSuggestions: Suggestion[], file) => {
+      if (file.suggestions) {
+        allSuggestions.push(...file.suggestions);
+      }
+      return allSuggestions;
+    }, []);
+  }
+  
+  if (analysis.suggestions) {
+    return analysis.suggestions;
+  }
+  
+  return [];
+};
+
+const getTotalAddedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.addedLines || 0), 0);
+};
+
+const getTotalRemovedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.removedLines || 0), 0);
+};
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -189,8 +258,25 @@ const loadAnalysis = async () => {
     if (apiError.value) {
       error.value = 'Erro ao carregar análise';
       console.error('Error loading analysis:', apiError.value);
-    } else if (result.value) {
-      analysis.value = result.value.data;
+    } else if (result.value?.success && Array.isArray(result.value.analysis)) {
+      // Filtra a análise específica pelo ID
+      const selectedAnalysis = result.value.analysis.find((a: CommitAnalysis) => a.id === id);
+      if (selectedAnalysis) {
+        analyses.value = [selectedAnalysis];
+      } else {
+        error.value = 'Análise não encontrada';
+      }
+    } else {
+      error.value = 'Formato de resposta inválido';
+    }
+    console.log('Análises carregadas:', analyses.value);
+  } catch (err) {
+    error.value = 'Erro ao carregar análise';
+    console.error('Error loading analysis:', err);
+  } finally {
+    loading.value = false;
+  }
+};
     }
   } catch (err) {
     error.value = 'Erro ao carregar análise';
@@ -210,6 +296,59 @@ onMounted(() => {
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.commit-container {
+  background: var(--card-background);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  margin-bottom: 2rem;
+  padding: 2rem;
+  transition: all 0.3s ease;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.commit-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+
+  h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    font-family: monospace;
+    transition: color 0.3s ease;
+  }
+
+  .commit-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+
+    .author {
+      font-weight: 500;
+    }
+
+    .date {
+      opacity: 0.8;
+    }
+
+    .language-badge {
+      padding: 0.25rem 0.75rem;
+      background: var(--primary-color);
+      color: white;
+      border-radius: 12px;
+      font-size: 0.85rem;
+    }
+  }
 }
 
 .loading,

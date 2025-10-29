@@ -1,5 +1,5 @@
 <template>
-  <div class="analysis-list-page">
+<div class="analysis-list-page">
     <header class="page-header">
       <h1>Análises de Commits</h1>
       <div class="filters">
@@ -18,45 +18,138 @@
       </div>
     </header>
 
-    <div v-if="loading" class="loading">Carregando análises...</div>
+    <div v-show="loading" class="loading">Carregando análises...</div>
 
-    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-show="error" class="error">{{ error }}</div>
 
-    <div v-else class="analyses-grid">
-      <div
-        v-for="analysis in filteredAnalyses"
-        :key="analysis.id"
-        class="analysis-card"
-        @click="goToAnalysis(analysis.id)"
-      >
-        <div class="card-header">
-          <h3>{{ analysis.commitId.substring(0, 8) }}</h3>
-          <span class="language-badge">{{ analysis.language }}</span>
-        </div>
-        <div class="card-body">
-          <p class="author">
-            <strong>{{ analysis.author }}</strong>
-          </p>
-          <p class="email">{{ analysis.email }}</p>
-          <p class="date">{{ formatDate(analysis.commitDate) }}</p>
-          <div class="stats">
-            <span class="stat">
-              <span class="stat-label">Arquivos:</span>
-              {{ analysis.files.length }}
-            </span>
-            <span class="stat">
-              <span class="stat-label">+{{ analysis.addedLines }}</span>
-              <span class="stat-label">-{{ analysis.removedLines }}</span>
-            </span>
+    <div v-show="!loading && !error" class="commits-list">
+      <div v-for="analysis in filteredAnalyses" :key="analysis.id" class="commit-container">
+        <div class="analysis-container" :class="{ 'expanded': isCommitExpanded(analysis.commitId || analysis.id || '') }">
+          <div class="commit-header" @click="toggleCommit(analysis.commitId || analysis.id || '')">
+            <div class="commit-title">
+              <span class="expand-icon">{{ isCommitExpanded(analysis.commitId || analysis.id || '') ? '▼' : '▶' }}</span>
+              <h2>Commit {{ (analysis.commitId || analysis.id || '').substring(0, 8) }}</h2>
+            </div>
+            <div class="commit-meta">
+              <span class="author" v-if="analysis.author">{{ analysis.author }}</span>
+              <span class="date" v-if="analysis.analysisDate">{{ formatDate(analysis.analysisDate) }}</span>
+              <span class="language-badge" v-if="getFirstLanguage(analysis)">{{ getFirstLanguage(analysis) }}</span>
+            </div>
           </div>
-        </div>
-        <div class="card-footer">
-          <div class="score" :class="getScoreClass(analysis.overallNote)">
-            <span class="score-label">Nota:</span>
-            <span class="score-value">{{ analysis.overallNote.toFixed(2) }}</span>
-          </div>
-          <div class="suggestions-count">
-            {{ analysis.suggestions.length }} sugestões
+
+          <div v-show="isCommitExpanded(analysis.commitId || analysis.id || '')" class="commit-details">
+            <div class="score-section">
+              <div class="overall-score" :class="getScoreClass(getOverallNote(analysis))">
+                <h2>Nota Geral</h2>
+                <div class="score-value">{{ getOverallNote(analysis).toFixed(2) }}</div>
+                <div class="score-quality">{{ getFirstFileRating(analysis)?.quality || 'N/A' }}</div>
+              </div>
+
+              <div class="metrics">
+                <div class="metric">
+                  <span class="metric-label">Arquivos</span>
+                  <span class="metric-value">{{ getAnalysisFiles(analysis).length }}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Linhas Adicionadas</span>
+                  <span class="metric-value added">+{{ getTotalAddedLines(analysis) }}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Linhas Removidas</span>
+                  <span class="metric-value removed">-{{ getTotalRemovedLines(analysis) }}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Sugestões</span>
+                  <span class="metric-value">{{ getAnalysisSuggestions(analysis).length }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="files-section">
+              <h2>Arquivos Analisados</h2>
+              <div class="files-list">
+                <div
+                  v-for="file in getAnalysisFiles(analysis)"
+                  :key="file.fileId || file.id"
+                  class="file-card"
+                  :class="{ 'has-analysis': file.rating }"
+                >
+                  <div class="file-header">
+                    <h3>{{ file.path }}</h3>
+                    <span class="file-language">{{ file.language }}</span>
+                  </div>
+                  <div class="file-stats">
+                    <span class="stat added">+{{ file.addedLines }}</span>
+                    <span class="stat removed">-{{ file.removedLines }}</span>
+                  </div>
+                  <div v-if="file.rating" class="file-rating">
+                    <div class="rating-item">
+                      <span>Variable Naming:</span>
+                      <span class="rating-value">{{ file.rating?.variableNaming ?? 'N/A' }}/10</span>
+                    </div>
+                    <div class="rating-item">
+                      <span>Function Sizes:</span>
+                      <span class="rating-value">{{ file.rating?.functionSizes ?? 'N/A' }}/10</span>
+                    </div>
+                    <div class="rating-item">
+                      <span>No Needs Comments:</span>
+                      <span class="rating-value">{{ file.rating?.noNeedsComments ?? 'N/A' }}/10</span>
+                    </div>
+                    <div class="rating-item">
+                      <span>Method Cohesion:</span>
+                      <span class="rating-value">{{ file.rating?.methodCohesion ?? 'N/A' }}/10</span>
+                    </div>
+                    <div class="rating-item">
+                      <span>Dead Code:</span>
+                      <span class="rating-value">{{ file.rating?.deadCode ?? 'N/A' }}/10</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="getAnalysisSuggestions(analysis).length > 0" class="suggestions-section">
+              <h2>Alterações no Código</h2>
+              <div v-for="file in getAnalysisFiles(analysis)" :key="file.fileId" class="file-diff-section">
+                <h3>{{ file.path }}</h3>
+                <DiffViewer v-if="file.content" :content="file.content" />
+              </div>
+              <h2>Sugestões de Melhoria</h2>
+              <div class="suggestions-container">
+                <div class="suggestions-list">
+                  <div
+                    v-for="(suggestion, index) in getAnalysisSuggestions(analysis)"
+                    :key="index"
+                    class="suggestion-card"
+                    :class="`priority-${suggestion.priority.toLowerCase()}`"
+                  >
+                    <div class="suggestion-header">
+                      <h3>{{ suggestion.title }}</h3>
+                      <div class="suggestion-badges">
+                        <span class="badge priority">{{ suggestion.priority }}</span>
+                        <span class="badge difficulty">{{ suggestion.difficult }}</span>
+                        <span class="badge type">{{ suggestion.type }}</span>
+                      </div>
+                    </div>
+                    <p class="suggestion-description">{{ suggestion.description }}</p>
+                    <div class="suggestion-footer">
+                      <span class="file-ref">{{ suggestion.fileReference }}</span>
+                      <div v-if="suggestion.studyResources && suggestion.studyResources.length > 0" class="resources">
+                        <span class="resources-label">Material de Estudo:</span>
+                        <div class="resources-list">
+                          <span
+                            v-for="(resource, idx) in suggestion.studyResources"
+                            :key="idx"
+                            class="resource-text"
+                          >
+                            {{ resource }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
           </div>
         </div>
       </div>
@@ -66,14 +159,16 @@
       Nenhuma análise encontrada.
     </div>
   </div>
-</template>
-
-<script setup lang="ts">
+  </div>
+</template><script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
+import { Suggestion } from '../interfaces/Suggestion';
+import DiffViewer from '../components/DiffViewer.vue';
+
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
@@ -84,32 +179,94 @@ const searchQuery = ref('');
 const selectedLanguage = ref('');
 const loading = ref(false);
 const error = ref<string | null>(null);
+const expandedCommits = ref<Set<string>>(new Set());
 
-const languages = computed(() => {
-  const langs = new Set(analyses.value.map((a) => a.language));
+const getFirstLanguage = (analysis: CommitAnalysis): string => {
+  if (!analysis?.filesDetails?.[0]?.language) return 'N/A';
+  return analysis.filesDetails[0].language;
+};
+
+const getOverallNote = (analysis: CommitAnalysis): number => {
+  if (!analysis) return 0;
+  return analysis.OverallNote || 0;
+};
+
+const getFirstFileRating = (analysis: CommitAnalysis) => {
+  if (!analysis) return null;
+
+  if (analysis.filesDetails && analysis.filesDetails.length > 0 && analysis.filesDetails[0]?.rating) {
+    return analysis.filesDetails[0].rating;
+  }
+  if (analysis.files && analysis.files.length > 0 && analysis.files[0]?.rating) {
+    return analysis.files[0].rating;
+  }
+  return null;
+};
+
+const getAnalysisFiles = (analysis: CommitAnalysis) => {
+  if (!analysis?.filesDetails) return [];
+  return analysis.filesDetails.filter(file => file != null);
+};
+
+const getAnalysisSuggestions = (analysis: CommitAnalysis) => {
+  if (!analysis?.filesDetails) return [];
+  return analysis.filesDetails.reduce((allSuggestions: Suggestion[], file) => {
+    if (file.suggestions) {
+      allSuggestions.push(...file.suggestions);
+    }
+    return allSuggestions;
+  }, []);
+};
+
+const getTotalAddedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.addedLines || 0), 0);
+};
+
+const getTotalRemovedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.removedLines || 0), 0);
+};
+
+const languages = computed<string[]>(() => {
+  const langs = new Set<string>();
+  analyses.value.forEach(analysis => {
+    if (analysis?.filesDetails) {
+      analysis.filesDetails.forEach(file => {
+        if (typeof file?.language === 'string') {
+          langs.add(file.language);
+        }
+      });
+    }
+  });
   return Array.from(langs).sort();
 });
 
-const filteredAnalyses = computed(() => {
+const filteredAnalyses = computed<CommitAnalysis[]>(() => {
   let filtered = analyses.value;
 
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase();
     filtered = filtered.filter(
       (a) =>
-        a.author.toLowerCase().includes(query) ||
-        a.commitId.toLowerCase().includes(query) ||
-        a.email.toLowerCase().includes(query)
+        (a?.author?.toLowerCase() || '').includes(query) ||
+        (a?.commitId?.toLowerCase() || '').includes(query) ||
+        (a?.email?.toLowerCase() || '').includes(query)
     );
   }
 
   if (selectedLanguage.value) {
-    filtered = filtered.filter((a) => a.language === selectedLanguage.value);
+    filtered = filtered.filter((a) => {
+      return a?.filesDetails?.some(file => file?.language === selectedLanguage.value) || false;
+    });
   }
 
   return filtered.sort(
-    (a, b) =>
-      new Date(b.commitDate).getTime() - new Date(a.commitDate).getTime()
+    (a, b) => {
+      const dateA = a?.analysisDate ? new Date(a.analysisDate).getTime() : 0;
+      const dateB = b?.analysisDate ? new Date(b.analysisDate).getTime() : 0;
+      return dateB - dateA;
+    }
   );
 });
 
@@ -132,25 +289,157 @@ const getScoreClass = (score: number) => {
   return 'score-needs-improvement';
 };
 
-const goToAnalysis = (id: string) => {
-  router.push({ name: 'AnalysisDetail', params: { id } });
+const toggleCommit = (commitId: string) => {
+  if (expandedCommits.value.has(commitId)) {
+    expandedCommits.value.delete(commitId);
+  } else {
+    expandedCommits.value.add(commitId);
+  }
+};
+
+const isCommitExpanded = (commitId: string): boolean => {
+  return expandedCommits.value.has(commitId);
+};
+
+const fetchAnalyses = async () => {
+  try {
+    loading.value = true;
+    error.value = null;
+    
+    console.log('Fazendo requisição para a API...');
+    const apiUrl = '/api/v1/analysis';
+    console.log('URL da API:', apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      credentials: 'same-origin'
+    });
+    
+    console.log('Status da resposta:', response.status);
+    console.log('Headers:', Object.fromEntries(response.headers.entries()));
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Erro da API:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+        url: response.url
+      });
+      throw new Error(`Erro na resposta da API: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Dados recebidos:', {
+      data,
+      type: typeof data,
+      isArray: Array.isArray(data),
+      hasData: data?.data !== undefined,
+      keys: Object.keys(data || {})
+    });
+    
+    return data;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+    error.value = `Erro ao carregar análises: ${errorMessage}`;
+    console.error('Error loading analyses:', {
+      error: err,
+      message: errorMessage,
+      stack: err instanceof Error ? err.stack : undefined,
+      type: err?.constructor?.name
+    });
+    return null;
+  }
 };
 
 const loadAnalyses = async () => {
-  loading.value = true;
-  error.value = null;
+  console.log('Iniciando carregamento...');
   try {
-    const { result, error: apiError } = await analysisService.getAnalyses();
-    if (apiError.value) {
-      error.value = 'Erro ao carregar análises';
-      console.error('Error loading analyses:', apiError.value);
-    } else if (result.value) {
-      analyses.value = result.value.data || [];
-      analysisStore.setAnalyses(analyses.value);
+    const data = await fetchAnalyses();
+    console.log('Resposta completa:', data);
+
+    if (!data) {
+      console.warn('Nenhum dado recebido da API');
+      analyses.value = [];
+      return;
     }
+
+    // Tenta encontrar os dados da análise em diferentes locais da resposta
+    let analysesData;
+    
+    if (data.success && Array.isArray(data.analysis)) {
+      console.log('Dados recebidos no formato correto');
+      analysesData = data.analysis;
+    } else if (Array.isArray(data)) {
+      console.log('Dados recebidos como array');
+      analysesData = data;
+    } else if (data.data && Array.isArray(data.data)) {
+      console.log('Dados recebidos dentro de data.data como array');
+      analysesData = data.data;
+    } else if (typeof data === 'object') {
+      if (data.id || data.commitId) {
+        console.log('Dados recebidos como objeto único de análise');
+        analysesData = [data];
+      } else if (data.data && typeof data.data === 'object') {
+        console.log('Dados recebidos como objeto único dentro de data');
+        analysesData = [data.data];
+      }
+    }
+
+    // Log para debug dos dados recebidos
+    console.log('Dados brutos recebidos:', JSON.stringify(analysesData, null, 2));
+
+    if (!analysesData) {
+      console.error('Formato de dados não reconhecido:', data);
+      analyses.value = [];
+      error.value = 'Formato de dados inválido recebido da API';
+      return;
+    }
+
+    // Filtra e valida cada item
+    analyses.value = analysesData.filter((item: any) => {
+      if (!item || typeof item !== 'object') {
+        console.warn('Item inválido encontrado:', item);
+        return false;
+      }
+      return true;
+    }).map((item: any) => {
+      // Garante que campos essenciais existam
+      return {
+        ...item,
+        id: item.id || crypto.randomUUID(),
+        commitId: item.commitId,
+        author: item.author || 'Autor desconhecido',
+        analysisDate: item.analysisDate || new Date().toISOString(),
+        OverallNote: item.OverallNote || 0,
+        filesDetails: Array.isArray(item.filesDetails) ? item.filesDetails.map((file: any) => ({
+          ...file,
+          fileId: file.fileId || crypto.randomUUID(),
+          path: file.path || '',
+          language: file.language || 'N/A',
+          addedLines: file.addedLines || 0,
+          removedLines: file.removedLines || 0,
+          content: file.content || '',
+          rating: file.rating || null,
+          suggestions: Array.isArray(file.suggestions) ? file.suggestions : []
+        })) : []
+      };
+    });
+
+    console.log('Análises processadas:', {
+      total: analyses.value.length,
+      items: analyses.value
+    });
+
+    analysisStore.setAnalyses(analyses.value);
   } catch (err) {
-    error.value = 'Erro ao carregar análises';
-    console.error('Error loading analyses:', err);
+    console.error('Erro ao processar dados:', err);
+    analyses.value = [];
+    error.value = 'Erro ao processar dados da análise';
   } finally {
     loading.value = false;
   }
@@ -166,6 +455,189 @@ onMounted(() => {
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.commit-container {
+  margin-bottom: 1rem;
+}
+
+.analysis-container {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+
+  .commit-header {
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card-background);
+    border-bottom: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: var(--hover-color, rgba(0, 0, 0, 0.05));
+    }
+
+    .commit-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+
+      .expand-icon {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        transition: transform 0.3s ease;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+    }
+    
+    .commit-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.9rem;
+      
+      .author {
+        color: var(--text-secondary);
+      }
+      
+      .date {
+        color: var(--text-secondary);
+      }
+      
+      .language-badge {
+        padding: 0.25rem 0.75rem;
+        background: var(--primary-color);
+        color: white;
+        border-radius: 12px;
+        font-size: 0.85rem;
+      }
+    }
+  }
+
+  .commit-details {
+    padding: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    animation: slideDown 0.3s ease;
+  }
+
+  &.expanded {
+    box-shadow: 0 2px 8px var(--shadow-color);
+    
+    .commit-header {
+      background: var(--light-gray, #f5f5f5);
+    }
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestions-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-background);
+  padding: 1rem;
+  margin-top: 1rem;
+  
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: var(--card-background);
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    
+    &:hover {
+      background: var(--primary-color);
+    }
+  }
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.suggestion-card {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+  }
+
+  .suggestion-header {
+    margin-bottom: 1rem;
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--text-primary);
+    }
+  }
+
+  .suggestion-description {
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+    color: var(--text-secondary);
+  }
+
+  .resources {
+    background: var(--light-gray);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+
+    .resources-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .resources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      .resource-text {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        padding: 0.25rem 0;
+      }
+    }
+  }
 }
 
 .page-header {
@@ -364,5 +836,188 @@ onMounted(() => {
 .score-needs-improvement {
   color: #e74c3c;
   background: rgba(231, 76, 60, 0.1);
+}
+
+.score-section {
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+
+  .overall-score {
+    padding: 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+    min-width: 200px;
+
+    h2 {
+      margin: 0 0 1rem;
+      font-size: 1.2rem;
+    }
+
+    .score-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+
+    .score-quality {
+      font-size: 1rem;
+      opacity: 0.8;
+    }
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    flex: 1;
+
+    .metric {
+      background: var(--card-background);
+      padding: 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+
+      .metric-label {
+        display: block;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-value {
+        font-size: 1.25rem;
+        font-weight: 500;
+
+        &.added {
+          color: #27ae60;
+        }
+
+        &.removed {
+          color: #e74c3c;
+        }
+      }
+    }
+  }
+}
+
+.files-section {
+  margin-bottom: 2rem;
+
+  h2 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+
+  .files-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(800px, 1fr));
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .file-card {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    .file-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+
+      h3 {
+        font-size: 0.9rem;
+        margin: 0;
+        color: var(--text-primary);
+        font-family: monospace;
+      }
+
+      .file-language {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        padding: 0.25rem 0.5rem;
+        background: var(--light-gray);
+        border-radius: 4px;
+      }
+    }
+
+    .file-stats {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+
+      .stat {
+        font-size: 0.9rem;
+
+        &.added {
+          color: #27ae60;
+        }
+
+        &.removed {
+          color: #e74c3c;
+        }
+      }
+    }
+
+    .file-rating {
+      border-top: 1px solid var(--border-color);
+      padding-top: 1rem;
+      margin-top: 1rem;
+
+      .rating-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 4px;
+        background: var(--light-gray);
+        transition: background-color 0.2s ease;
+
+        &:hover {
+          background: var(--hover-color);
+        }
+
+        span:first-child {
+          color: var(--text-secondary);
+          font-weight: 500;
+        }
+
+        .rating-value {
+          font-weight: 600;
+          color: var(--primary-color);
+        }
+      }
+    }
+
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+
+.suggestions-section {
+  h2 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+}
+
+.file-diff-section {
+  margin: 1.5rem 0;
+  
+  h3 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    font-family: monospace;
+    margin-bottom: 0.5rem;
+  }
 }
 </style>
