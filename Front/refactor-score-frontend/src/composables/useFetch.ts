@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import axios, { AxiosError, Method } from 'axios';
 
 export interface ErrorResponse {
@@ -8,12 +8,14 @@ export interface ErrorResponse {
 }
 
 export interface HttpResponse<T> {
-  result: any;
-  error: any;
+  result: Ref<T | undefined>;
+  error: Ref<AxiosError<ErrorResponse> | null>;
 }
 
 export enum Service {
+  Dashboard ='/api/v1/main',
   Analysis = '/api/v1/analysis',
+  Statistics = '/api/v1/statistics'
 }
 
 export function useFetch(service?: Service) {
@@ -21,7 +23,7 @@ export function useFetch(service?: Service) {
   const loading = ref(false);
   const error = ref<AxiosError<ErrorResponse, any> | null>(null);
 
-  const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const baseURL = '';
   
   const api = axios.create({
     baseURL: service ? `${baseURL}${service}` : baseURL,
@@ -50,7 +52,17 @@ export function useFetch(service?: Service) {
         },
       });
 
-      result.value = response.data;
+      // Handle nested response structure
+      if (response.data && typeof response.data === 'object') {
+        // Check if response has success and analysis fields
+        if ('success' in response.data && 'analysis' in response.data) {
+          result.value = response.data.analysis;
+        } else {
+          result.value = response.data;
+        }
+      } else {
+        result.value = response.data;
+      }
     } catch (err) {
       const axiosError = err as AxiosError<ErrorResponse, any>;
       error.value = axiosError;

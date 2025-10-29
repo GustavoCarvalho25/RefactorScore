@@ -20,10 +20,10 @@ export function useTheme() {
 
   const applyTheme = () => {
     if (isDark.value) {
-      document.documentElement.classList.add('dark-mode');
+      document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.documentElement.classList.remove('dark-mode');
+      document.documentElement.removeAttribute('data-theme');
       localStorage.setItem('theme', 'light');
     }
   };
