@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, watch, ref } from 'vue';
+import { onMounted, onBeforeUnmount, watch, ref, nextTick } from 'vue';
 import {
   Chart,
   ChartConfiguration,
@@ -56,6 +56,12 @@ const updateChart = () => {
   }
 };
 
+const recreateChart = async () => {
+  destroyChart();
+  await nextTick();
+  createChart();
+};
+
 onMounted(() => {
   createChart();
 });
@@ -71,6 +77,14 @@ watch(
   },
   { deep: true }
 );
+
+watch(
+  () => props.options,
+  () => {
+    recreateChart();
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped lang="scss">
@@ -78,6 +92,13 @@ watch(
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 300px;
+  max-width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  
+  canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
+  }
 }
 </style>

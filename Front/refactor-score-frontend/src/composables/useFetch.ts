@@ -21,8 +21,7 @@ export function useFetch(service?: Service) {
   const loading = ref(false);
   const error = ref<AxiosError<ErrorResponse, any> | null>(null);
 
-  // TODO: Configurar a URL base da API quando estiver disponível
-  const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
   
   const api = axios.create({
     baseURL: service ? `${baseURL}${service}` : baseURL,

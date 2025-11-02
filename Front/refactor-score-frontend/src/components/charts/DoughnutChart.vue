@@ -1,7 +1,7 @@
 <template>
   <BaseChart
     :chart-id="chartId"
-    type="line"
+    type="doughnut"
     :data="chartData"
     :options="chartOptions"
   />
@@ -18,18 +18,14 @@ interface Props {
   datasets: {
     label: string;
     data: number[];
-    borderColor?: string;
-    backgroundColor?: string;
+    backgroundColor?: string[];
+    borderColor?: string[];
   }[];
   title?: string;
-  yAxisStepSize?: number;
-  yAxisMax?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Line Chart',
-  yAxisStepSize: undefined,
-  yAxisMax: undefined,
+  title: 'Doughnut Chart',
 });
 
 const { isDark } = useTheme();
@@ -39,44 +35,33 @@ const chartData = computed(() => ({
   datasets: props.datasets.map((dataset) => ({
     label: dataset.label,
     data: dataset.data,
-    borderColor: dataset.borderColor || 'rgba(68, 123, 218, 1)',
-    backgroundColor: dataset.backgroundColor || 'rgba(68, 123, 218, 0.1)',
-    tension: 0.4,
-    fill: true,
+    backgroundColor: dataset.backgroundColor || [
+      'rgba(68, 123, 218, 0.8)',
+      'rgba(75, 192, 192, 0.8)',
+      'rgba(255, 206, 86, 0.8)',
+      'rgba(153, 102, 255, 0.8)',
+      'rgba(255, 159, 64, 0.8)',
+    ],
+    borderColor: dataset.borderColor || [
+      'rgba(68, 123, 218, 1)',
+      'rgba(75, 192, 192, 1)',
+      'rgba(255, 206, 86, 1)',
+      'rgba(153, 102, 255, 1)',
+      'rgba(255, 159, 64, 1)',
+    ],
+    borderWidth: 2,
   })),
 }));
 
 const chartOptions = computed(() => {
   // Usa isDark.value para reagir às mudanças de tema
   const textColor = isDark.value ? '#ffffff' : '#2c3e50';
-  const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
-  
-  const yAxisConfig: any = {
-    beginAtZero: true,
-    ticks: {
-      color: textColor,
-    },
-    grid: {
-      color: gridColor,
-    },
-  };
-
-  // Adiciona stepSize se fornecido
-  if (props.yAxisStepSize) {
-    yAxisConfig.ticks.stepSize = props.yAxisStepSize;
-  }
-
-  // Adiciona max se fornecido
-  if (props.yAxisMax !== undefined) {
-    yAxisConfig.max = props.yAxisMax;
-  }
   
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: true,
         position: 'top' as const,
         labels: {
           color: textColor,
@@ -94,17 +79,7 @@ const chartOptions = computed(() => {
         },
       },
     },
-    scales: {
-      y: yAxisConfig,
-      x: {
-        ticks: {
-          color: textColor,
-        },
-        grid: {
-          color: gridColor,
-        },
-      },
-    },
   };
 });
 </script>
+

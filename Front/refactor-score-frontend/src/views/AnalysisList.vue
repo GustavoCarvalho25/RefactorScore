@@ -173,8 +173,9 @@ onMounted(() => {
 
   h1 {
     font-size: 2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 
   .filters {
@@ -186,14 +187,16 @@ onMounted(() => {
   .search-input,
   .language-filter {
     padding: 0.75rem 1rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 1rem;
     outline: none;
-    transition: border-color 0.3s ease;
+    background: var(--card-background);
+    color: var(--text-primary);
+    transition: all 0.3s ease;
 
     &:focus {
-      border-color: #447bda;
+      border-color: var(--primary-color);
     }
   }
 
@@ -213,11 +216,12 @@ onMounted(() => {
   text-align: center;
   padding: 3rem;
   font-size: 1.1rem;
-  color: #7f8c8d;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
 }
 
 .error {
-  color: #e74c3c;
+  color: var(--danger-color);
 }
 
 .analyses-grid {
@@ -227,16 +231,16 @@ onMounted(() => {
 }
 
 .analysis-card {
-  background: white;
+  background: var(--card-background);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
 
   &:hover {
     transform: translateY(-4px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px var(--shadow-color);
   }
 
   .card-header {
@@ -244,18 +248,19 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--light-gray);
+    border-bottom: 1px solid var(--border-color);
 
     h3 {
       font-size: 1.1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       font-family: monospace;
+      transition: color 0.3s ease;
     }
 
     .language-badge {
       padding: 0.25rem 0.75rem;
-      background: #447bda;
+      background: var(--primary-color);
       color: white;
       border-radius: 12px;
       font-size: 0.85rem;
@@ -268,20 +273,23 @@ onMounted(() => {
 
     .author {
       font-size: 1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       margin-bottom: 0.25rem;
+      transition: color 0.3s ease;
     }
 
     .email {
       font-size: 0.85rem;
-      color: #7f8c8d;
+      color: var(--text-secondary);
       margin-bottom: 0.5rem;
+      transition: color 0.3s ease;
     }
 
     .date {
       font-size: 0.85rem;
-      color: #95a5a6;
+      color: var(--medium-gray);
       margin-bottom: 1rem;
+      transition: color 0.3s ease;
     }
 
     .stats {
@@ -290,7 +298,8 @@ onMounted(() => {
       font-size: 0.9rem;
 
       .stat {
-        color: #7f8c8d;
+        color: var(--text-secondary);
+        transition: color 0.3s ease;
 
         .stat-label {
           font-weight: 500;
@@ -304,8 +313,8 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
-    background: #f8f9fa;
-    border-top: 1px solid #e0e0e0;
+    background: var(--light-gray);
+    border-top: 1px solid var(--border-color);
 
     .score {
       display: flex;
@@ -326,7 +335,8 @@ onMounted(() => {
 
     .suggestions-count {
       font-size: 0.85rem;
-      color: #7f8c8d;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
     }
   }
 }
