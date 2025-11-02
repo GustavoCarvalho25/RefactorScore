@@ -31,9 +31,7 @@ public class CleanCodeRatingBuilder
             ["NoNeedsComments"] = _faker.Lorem.Sentence(),
             ["MethodCohesion"] = _faker.Lorem.Sentence(),
             ["DeadCode"] = _faker.Lorem.Sentence()
-        };
-        
-        
+        };        
         
         return this;
     }
