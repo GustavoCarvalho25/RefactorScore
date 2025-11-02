@@ -22,9 +22,9 @@ public class CommitAnalysis : Entity, IAggregateRoot
     public List<CommitFile> Files => _files;
     public List<Suggestion> Suggestions => _suggestions;
     
-    public CleanCodeRating? Rating => CalculateOverallRating();
+    public CleanCodeRating? Rating { get; private set; }
     
-    public double OverallNote => Rating?.Note ?? 0.0;
+    public double OverallNote { get; private set; }
 
     private CleanCodeRating CalculateOverallRating()
     {
@@ -99,6 +99,11 @@ public class CommitAnalysis : Entity, IAggregateRoot
             throw new DomainException($"File {file.Path} already exists in this analysis");
             
         _files.Add(file);
+        
+        if (file.HasAnalysis)
+        {
+            UpdateOverallNote();
+        }
     }
     
     public void AddSuggestion(Suggestion suggestion) => _suggestions.Add(suggestion);
@@ -113,5 +118,12 @@ public class CommitAnalysis : Entity, IAggregateRoot
         _suggestions.AddRange(suggestions);
         
         CalculateChanges();
+        UpdateOverallNote();
+    }
+    
+    private void UpdateOverallNote()
+    {
+        Rating = CalculateOverallRating();
+        OverallNote = Rating?.Note ?? 0.0;
     }
 }
