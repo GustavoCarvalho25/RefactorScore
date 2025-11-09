@@ -12,30 +12,29 @@ import { computed } from 'vue';
 import BaseChart from './BaseChart.vue';
 import { CleanCodeRating } from '../../interfaces/CleanCodeRating';
 import { useTheme } from '../../composables/useTheme';
+import { translateMetric } from '../../utils/translations';
 
-interface Props {
+const props = defineProps<{
   chartId: string;
   rating: CleanCodeRating;
   title?: string;
-}
+}>();
 
-const props = withDefaults(defineProps<Props>(), {
-  title: 'Clean Code Rating',
-});
+const title = props.title ?? 'Clean Code Rating';
 
 const { isDark } = useTheme();
 
 const chartData = computed(() => ({
   labels: [
-    'Variable Naming',
-    'Function Sizes',
-    'No Needs Comments',
-    'Method Cohesion',
-    'Dead Code',
+    translateMetric('Variable Naming'),
+    translateMetric('Function Sizes'),
+    translateMetric('No Needs Comments'),
+    translateMetric('Method Cohesion'),
+    translateMetric('Dead Code'),
   ],
   datasets: [
     {
-      label: props.title,
+      label: title,
       data: [
         props.rating.variableNaming,
         props.rating.functionSizes,
@@ -55,7 +54,6 @@ const chartData = computed(() => ({
 }));
 
 const chartOptions = computed(() => {
-  // Usa isDark.value para reagir às mudanças de tema
   const textColor = isDark.value ? '#ffffff' : '#2c3e50';
   const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
   
@@ -101,7 +99,7 @@ const chartOptions = computed(() => {
       },
       title: {
         display: true,
-        text: props.title,
+        text: title,
         color: textColor,
         font: {
           size: 16,

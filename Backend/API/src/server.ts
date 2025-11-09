@@ -9,7 +9,7 @@ dotenv.config()
 const app = express()
 
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: 'http://RefactorScorehost:5173',
   credentials: true
 }))
 
@@ -35,22 +35,31 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
 
+      const projectFilter = (req.query.project as string) || '';
+      
       // optional: filter to specific commit ids passed as comma-separated query param
       const commitIdsParam = (req.query.commitIds as string) || '';
       const commitIds = commitIdsParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
-      // Conta total de documentos (aplica filtro se commitIds foram informados)
-      const total = commitIds.length > 0
-        ? await collection.countDocuments({ _id: { $in: commitIds as any } })
-        : await collection.countDocuments();
+      // Construir filtro base
+      const baseFilter: any = {};
+      if (projectFilter) {
+        baseFilter.Project = projectFilter;
+      }
+      if (commitIds.length > 0) {
+        baseFilter._id = { $in: commitIds as any };
+      }
+
+      // Conta total de documentos (aplica filtros)
+      const total = await collection.countDocuments(baseFilter);
 
       // Conta total de arquivos analisados em todos os commits
       const filesCountPipeline: any[] = [];
-      if (commitIds.length > 0) {
-        filesCountPipeline.push({ $match: { _id: { $in: commitIds } } });
+      if (Object.keys(baseFilter).length > 0) {
+        filesCountPipeline.push({ $match: baseFilter });
       }
       filesCountPipeline.push(
         { $project: { files: { $ifNull: ['$Files', '$files'] } } },
@@ -105,8 +114,8 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
         }
       ];
 
-      const pipeline = commitIds.length > 0
-        ? [{ $match: { _id: { $in: commitIds as any } } }, ...basePipeline]
+      const pipeline = Object.keys(baseFilter).length > 0
+        ? [{ $match: baseFilter }, ...basePipeline]
         : basePipeline;
 
       const agg = await collection.aggregate(pipeline).toArray();
@@ -114,8 +123,8 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
 
       // Conta arquivos únicos por id dentro de Files/files
       const uniqueFilesPipeline: any[] = [];
-      if (commitIds.length > 0) {
-        uniqueFilesPipeline.push({ $match: { _id: { $in: commitIds } } });
+      if (Object.keys(baseFilter).length > 0) {
+        uniqueFilesPipeline.push({ $match: baseFilter });
       }
       uniqueFilesPipeline.push(
         { $project: { filesArr: { $ifNull: ['$Files', '$files'] } } },
@@ -131,8 +140,8 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
 
       // Conta frequência de linguagens dentro de Files/files de todos os documentos
       const languageFrequencyPipeline: any[] = [];
-      if (commitIds.length > 0) {
-        languageFrequencyPipeline.push({ $match: { _id: { $in: commitIds } } });
+      if (Object.keys(baseFilter).length > 0) {
+        languageFrequencyPipeline.push({ $match: baseFilter });
       }
       languageFrequencyPipeline.push(
         { $project: { filesArr: { $ifNull: ['$Files', '$files'] } } },
@@ -276,8 +285,8 @@ app.get('/api/v1/statistics', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
 
       // Buscar commits individuais com suas notas, metadados e métricas
       const commitsPipeline = [
@@ -371,8 +380,8 @@ app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
 
       const limit = parseInt((req.query.limit as string) || '5', 10);
       const docs = await collection.find({}).limit(limit).toArray();
@@ -429,6 +438,99 @@ app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
   })();
 })
 
+// Endpoint para listar todos os projetos com suas métricas
+app.get('/api/v1/projects', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' 
+    });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+
+      // Buscar todos os projetos únicos
+      const projectNames = await collection.distinct('Project');
+
+      // Para cada projeto, agregar suas métricas
+      const projectsWithMetrics = await Promise.all(
+        projectNames.map(async (projectName: string) => {
+          // Pipeline de agregação para calcular métricas do projeto
+          const metricsPipeline = [
+            { $match: { Project: projectName } },
+            {
+              $group: {
+                _id: '$Project',
+                totalCommits: { $sum: 1 },
+                lastAnalysisDate: { $max: '$AnalysisDate' },
+                totalFiles: { $sum: { $size: { $ifNull: ['$Files', []] } } },
+                // Calcular média das notas
+                avgNote: {
+                  $avg: {
+                    $ifNull: [
+                      '$Rating.Note',
+                      { $ifNull: ['$OverallNote', 0] }
+                    ]
+                  }
+                }
+              }
+            }
+          ];
+
+          const metricsResult = await collection.aggregate(metricsPipeline).toArray();
+          const metrics = metricsResult[0] || {};
+
+          // Buscar linguagem mais comum no projeto
+          const languagePipeline = [
+            { $match: { Project: projectName } },
+            { $group: { _id: '$Language', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 1 }
+          ];
+
+          const languageResult = await collection.aggregate(languagePipeline).toArray();
+          const mainLanguage = languageResult[0]?._id || 'Unknown';
+
+          return {
+            name: projectName,
+            totalCommits: metrics.totalCommits || 0,
+            averageNote: Math.round((metrics.avgNote || 0) * 100) / 100,
+            lastAnalysisDate: metrics.lastAnalysisDate || null,
+            mainLanguage: mainLanguage,
+            totalFiles: metrics.totalFiles || 0
+          };
+        })
+      );
+
+      // Ordenar por data de última análise (mais recente primeiro)
+      projectsWithMetrics.sort((a, b) => {
+        if (!a.lastAnalysisDate) return 1;
+        if (!b.lastAnalysisDate) return -1;
+        return new Date(b.lastAnalysisDate).getTime() - new Date(a.lastAnalysisDate).getTime();
+      });
+
+      res.json({ 
+        success: true, 
+        projects: projectsWithMetrics 
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao buscar projetos', 
+        message: error.message 
+      });
+    } finally {
+      await client.close();
+    }
+  })();
+});
+
 app.get('/api/v1/analysis', (req: Request, res: Response) => {
   const uri = process.env.MONGODB_URI;
   if (!uri || typeof uri !== 'string' || uri.trim() === '') {
@@ -439,10 +541,18 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+      
+      // Filtro por projeto (query param ?project=)
+      const projectFilter = (req.query.project as string) || '';
+      const filter: any = {};
+      if (projectFilter) {
+        filter.Project = projectFilter;
+      }
+      
       const limit = parseInt((req.query.limit as string) || '5', 10);
-      const docs = await collection.find({}).limit(limit).toArray();
+      const docs = await collection.find(filter).limit(limit).toArray();
       const result = docs.map((d: any) => {
         const filesArr: any[] = d.Files ?? d.files ?? [];
         const filesDetails = (filesArr || []).map((f: any) => {

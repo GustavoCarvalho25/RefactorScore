@@ -15,7 +15,8 @@ export interface HttpResponse<T> {
 export enum Service {
   Dashboard ='/api/v1/main',
   Analysis = '/api/v1/analysis',
-  Statistics = '/api/v1/statistics'
+  Statistics = '/api/v1/statistics',
+  Projects = '/api/v1/projects'
 }
 
 export function useFetch(service?: Service) {

@@ -64,6 +64,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useFetch, Service } from '../composables/useFetch';
 import type { CommitAnalysis } from '../interfaces/CommitAnalysis';
 import type { CleanCodeRating } from '../interfaces/CleanCodeRating';
+import { translateQuality } from '../utils/translations';
 import BarChart from '../components/charts/BarChart.vue';
 import LineChart from '../components/charts/LineChart.vue';
 import RadarChart from '../components/charts/RadarChart.vue';
@@ -149,7 +150,7 @@ const qualityDistribution = computed(() => {
   });
 
   return {
-    labels: qualities,
+    labels: qualities.map(q => translateQuality(q)),
     datasets: [
       {
         label: 'Porcentagem de Commits',

@@ -1,11 +1,18 @@
-import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, RouteRecordRaw, RouteLocationNormalized } from 'vue-router';
+import { useProjectStore } from '../stores/projectStore';
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
+    name: 'ProjectSelection',
+    component: () => import('../views/ProjectSelection.vue'),
+    meta: { title: 'Selecionar Projeto', requiresNoProject: true }
+  },
+  {
+    path: '/dashboard',
     name: 'Home',
     component: () => import('../views/Dashboard.vue'),
-    meta: { title: 'Dashboard' }
+    meta: { title: 'Dashboard', requiresProject: true }
   },
   {
     path: '/analysis',
@@ -14,20 +21,20 @@ const routes: RouteRecordRaw[] = [
       console.error('Error loading AnalysisList:', err);
       throw err;
     }),
-    meta: { title: 'Análises' }
+    meta: { title: 'Análises', requiresProject: true }
   },
   {
     path: '/analysis/:id',
     name: 'AnalysisDetail',
     component: () => import('../views/AnalysisDetail.vue'),
     props: true,
-    meta: { title: 'Detalhes da Análise' }
+    meta: { title: 'Detalhes da Análise', requiresProject: true }
   },
   {
     path: '/statistics',
     name: 'Statistics',
     component: () => import('../views/Statistics.vue'),
-    meta: { title: 'Estatísticas' }
+    meta: { title: 'Estatísticas', requiresProject: true }
   },
   {
     path: '/:pathMatch(.*)*',
@@ -40,7 +47,7 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior(to: RouteLocationNormalized, from: RouteLocationNormalized, savedPosition: any) {
     if (savedPosition) {
       return savedPosition;
     } else {
@@ -49,19 +56,24 @@ const router = createRouter({
   }
 });
 
-// Tratamento global de erros de navegação
-router.onError((error, to) => {
+router.onError((error: Error, to: RouteLocationNormalized) => {
   console.error('Router error:', error);
   console.error('Failed route:', to);
 });
 
-// Atualiza o título da página e faz outras preparações
-router.beforeEach((to, from) => {
-  // Atualiza o título da página
+router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized) => {
   document.title = `${to.meta.title || 'RefactorScore'} - RefactorScore`;
   
-  // Limpa erros anteriores
-  console.clear();
+  const projectStore = useProjectStore();
+  const hasProject = projectStore.hasSelectedProject;
+  
+  if (to.meta.requiresProject && !hasProject) {
+    return { name: 'ProjectSelection' };
+  }
+  
+  if (to.meta.requiresNoProject && hasProject && from.name !== undefined) {
+    return { name: 'Home' };
+  }
   
   return true;
 });

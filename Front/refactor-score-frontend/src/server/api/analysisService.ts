@@ -1,13 +1,22 @@
 import { useFetch, Service, HttpResponse } from '../../composables/useFetch';
+import { useProjectStore } from '../../stores/projectStore';
 import type { CommitAnalysis } from '../../interfaces/CommitAnalysis';
 import type { Statistics } from '../../interfaces/Statistics';
 import type { ApiResponse } from '../../interfaces/ApiResponse';
 
 export function useAnalysisService() {
   const { fetchData, error, result, loading } = useFetch(Service.Analysis);
+  const projectStore = useProjectStore();
 
   const getAnalyses = async (params = ''): Promise<HttpResponse<CommitAnalysis[]>> => {
-    await fetchData('get', `?${params}`);
+    const urlParams = new URLSearchParams(params);
+    
+    if (projectStore.selectedProject) {
+      urlParams.set('project', projectStore.selectedProject);
+    }
+    
+    const queryString = urlParams.toString();
+    await fetchData('get', queryString ? `?${queryString}` : '');
     return {
       error,
       result,
@@ -32,6 +41,11 @@ export function useAnalysisService() {
 
   const getAnalysisStatistics = async (startDate?: string, endDate?: string): Promise<HttpResponse<Statistics>> => {
     const params = new URLSearchParams();
+    
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
     
@@ -44,7 +58,16 @@ export function useAnalysisService() {
   };
 
   const getAnalysisByDateRange = async (startDate: string, endDate: string): Promise<HttpResponse<CommitAnalysis[]>> => {
-    await fetchData('get', `/date-range?start=${startDate}&end=${endDate}`);
+    const params = new URLSearchParams();
+    params.append('start', startDate);
+    params.append('end', endDate);
+    
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    
+    const queryString = params.toString();
+    await fetchData('get', `/date-range?${queryString}`);
     return {
       error,
       result,
@@ -52,7 +75,14 @@ export function useAnalysisService() {
   };
 
   const getAnalysisByAuthor = async (author: string): Promise<HttpResponse<CommitAnalysis[]>> => {
-    await fetchData('get', `/author/${author}`);
+    const params = new URLSearchParams();
+    
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    
+    const queryString = params.toString();
+    await fetchData('get', `/author/${author}${queryString ? `?${queryString}` : ''}`);
     return {
       error,
       result,
@@ -60,7 +90,14 @@ export function useAnalysisService() {
   };
 
   const getCommitAnalysisCount = async (): Promise<HttpResponse<any>> => {
-    await fetchData('get', '/count');
+    const params = new URLSearchParams();
+    
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    
+    const queryString = params.toString();
+    await fetchData('get', `/count${queryString ? `?${queryString}` : ''}`);
     return {
       error,
       result,

@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router';
+import { RouterView, useRouter } from 'vue-router';
 import { useTheme } from './composables/useTheme';
-import { onMounted } from 'vue';
+import { useProjectStore } from './stores/projectStore';
+import { storeToRefs } from 'pinia';
+import { onMounted, computed } from 'vue';
 
+const router = useRouter();
 const { isDark, toggleTheme, initTheme } = useTheme();
+const projectStore = useProjectStore();
+const { selectedProject } = storeToRefs(projectStore);
+
+const showNavigation = computed(() => {
+  return selectedProject.value !== null;
+});
+
+const changeProject = () => {
+  projectStore.clearSelection();
+  router.push({ name: 'ProjectSelection' });
+};
 
 onMounted(() => {
   initTheme();
@@ -12,17 +26,20 @@ onMounted(() => {
 
 <template>
   <div id="app">
-    <nav class="navbar">
+    <nav class="navbar" v-if="showNavigation">
       <div class="navbar-brand">
-        <router-link to="/" class="brand-link">
+        <router-link to="/dashboard" class="brand-link">
           <h1>RefactorScore</h1>
-          <span class="subtitle">Clean Code Analysis</span>
+          <span class="subtitle">{{ selectedProject }}</span>
         </router-link>
       </div>
       <div class="navbar-menu">
-        <router-link to="/" class="nav-link">Dashboard</router-link>
+        <router-link to="/dashboard" class="nav-link">Dashboard</router-link>
         <router-link to="/analysis" class="nav-link">Análises</router-link>
         <router-link to="/statistics" class="nav-link">Estatísticas</router-link>
+        <button class="change-project-btn" @click="changeProject" title="Trocar Projeto">
+          Trocar Projeto
+        </button>
         <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Modo Claro' : 'Modo Escuro'">
           <span v-if="isDark">☀️</span>
           <span v-else>🌙</span>
@@ -110,6 +127,31 @@ body {
       &.router-link-active {
         background: #447bda;
         color: white;
+      }
+    }
+
+    .change-project-btn {
+      background: transparent;
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+
+      &:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background: var(--background-color);
+      }
+
+      &:active {
+        transform: scale(0.98);
       }
     }
 

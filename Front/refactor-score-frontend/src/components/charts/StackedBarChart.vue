@@ -18,7 +18,7 @@ interface Props {
 	datasets: {
 		label: string;
 		data: number[];
-		count?: number; // contagem absoluta original
+		count?: number;
 		backgroundColor?: string | string[];
 		borderColor?: string | string[];
 	}[];
