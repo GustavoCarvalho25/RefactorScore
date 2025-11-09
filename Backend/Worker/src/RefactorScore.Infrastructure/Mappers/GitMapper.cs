@@ -8,13 +8,12 @@ namespace RefactorScore.Infrastructure.Mappers;
 public partial class GitMapper
 {
     private readonly ILogger<GitMapper> _logger;
-
     public GitMapper(ILogger<GitMapper> logger)
     {
         _logger = logger;
     }
     
-    public CommitData MapCommitToCommitData(Commit libGitCommit)
+    public CommitData MapCommitToCommitData(Commit libGitCommit, string repositoryPath = null)
     {
         return new CommitData
         {
@@ -23,9 +22,33 @@ public partial class GitMapper
             Email = libGitCommit.Author.Email,
             Date = libGitCommit.Author.When.DateTime,
             Message = libGitCommit.Message.Trim(),
-            MessageShort = libGitCommit.MessageShort
-            
+            MessageShort = libGitCommit.MessageShort,
+            ProjectName = ExtractProjectName(repositoryPath)
         };
+    }
+    
+    private string ExtractProjectName(string repositoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryPath))
+            return "Unknown";
+        
+        try
+        {
+            var cleanPath = repositoryPath.TrimEnd('\\', '/');
+            if (cleanPath.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanPath = Path.GetDirectoryName(cleanPath);
+            }
+            
+            var projectName = Path.GetFileName(cleanPath);
+            
+            return string.IsNullOrWhiteSpace(projectName) ? "Unknown" : projectName;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error extracting project name from path: {RepositoryPath}", repositoryPath);
+            return "Unknown";
+        }
     }
 
     public List<FileChange> MapCommitChangesToFileChanges(Commit libGitCommit, Repository repo)

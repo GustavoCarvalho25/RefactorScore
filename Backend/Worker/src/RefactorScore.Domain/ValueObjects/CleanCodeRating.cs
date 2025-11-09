@@ -12,28 +12,11 @@ public class CleanCodeRating : ValueObject
     public int MethodCohesion { get; private set; }
     public int DeadCode { get; private set; }
 
-    public double Note => CalculateNote();
+    public double Note { get; private set; }
+    
+    public string Quality { get; private set; }
     
     public Dictionary<string, string> Justifications { get; private set; }
-    
-    private double CalculateNote()
-        => (VariableNaming + FunctionSizes + NoNeedsComments + MethodCohesion + DeadCode) / 5.0;
-    
-    public string Quality
-    {
-        get
-        {
-            return Note switch
-            {
-                >= 9.0 => RatingQuality.Excellent.ToString(),
-                >= 7.5 => RatingQuality.VeryGood.ToString(),
-                >= 6.0 => RatingQuality.Good.ToString(),
-                >= 5.0 => RatingQuality.Acceptable.ToString(),
-                >= 3.5 => RatingQuality.NeedsImprovement.ToString(),
-                _ => RatingQuality.Problematic.ToString()
-            };
-        }
-    }
     
     public CleanCodeRating(int variableNaming, int functionSizes, int noNeedsComments, int methodCohesion, int deadCode, Dictionary<string, string> justifications = null)
     {
@@ -55,6 +38,23 @@ public class CleanCodeRating : ValueObject
         MethodCohesion = methodCohesion;
         DeadCode = deadCode;
         Justifications = (justifications ?? new Dictionary<string, string>());
+        
+        CalculateNoteAndQuality();
+    }
+    
+    private void CalculateNoteAndQuality()
+    {
+        Note = (VariableNaming + FunctionSizes + NoNeedsComments + MethodCohesion + DeadCode) / 5.0;
+        
+        Quality = Note switch
+        {
+            >= 9.0 => RatingQuality.Excellent.ToString(),
+            >= 7.5 => RatingQuality.VeryGood.ToString(),
+            >= 6.0 => RatingQuality.Good.ToString(),
+            >= 5.0 => RatingQuality.Acceptable.ToString(),
+            >= 3.5 => RatingQuality.NeedsImprovement.ToString(),
+            _ => RatingQuality.Problematic.ToString()
+        };
     }
 
     private CleanCodeRating()

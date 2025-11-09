@@ -8,6 +8,7 @@ namespace RefactorScore.Domain.Entities;
 public class CommitAnalysis : Entity, IAggregateRoot
 {
     public string CommitId { get; private set; }
+    public string Project { get; private set; }
     public string Author { get; private set; }
     public string Email { get; private set; }
     public DateTime CommitDate { get; private set; }
@@ -22,9 +23,9 @@ public class CommitAnalysis : Entity, IAggregateRoot
     public List<CommitFile> Files => _files;
     public List<Suggestion> Suggestions => _suggestions;
     
-    public CleanCodeRating? Rating => CalculateOverallRating();
+    public CleanCodeRating? Rating { get; private set; }
     
-    public double OverallNote => Rating?.Note ?? 0.0;
+    public double OverallNote { get; private set; }
 
     private CleanCodeRating CalculateOverallRating()
     {
@@ -52,12 +53,13 @@ public class CommitAnalysis : Entity, IAggregateRoot
         RemovedLines = _files.Sum(f => f.RemovedLines);
     }
     
-    public CommitAnalysis(string commitId, string author, string email, DateTime commitDate, DateTime analysisDate, string language, int addedLines, int removedLines)
+    public CommitAnalysis(string commitId, string author, string email, DateTime commitDate, DateTime analysisDate, string language, int addedLines, int removedLines, string project)
     {
         Guard.Against.NullOrWhiteSpace(commitId, nameof(commitId));
         Guard.Against.NullOrWhiteSpace(author, nameof(author));
         Guard.Against.NullOrWhiteSpace(email, nameof(email));
         Guard.Against.NullOrWhiteSpace(language, nameof(language));
+        Guard.Against.NullOrWhiteSpace(project, nameof(project));
         Guard.Against.Negative(addedLines, nameof(addedLines));
         Guard.Against.Negative(removedLines, nameof(removedLines));
         
@@ -78,6 +80,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
         Language = language;
         AddedLines = addedLines;
         RemovedLines = removedLines;
+        Project = project;
     }
     
     private static bool IsValidEmail(string email)
@@ -99,6 +102,11 @@ public class CommitAnalysis : Entity, IAggregateRoot
             throw new DomainException($"File {file.Path} already exists in this analysis");
             
         _files.Add(file);
+        
+        if (file.HasAnalysis)
+        {
+            UpdateOverallNote();
+        }
     }
     
     public void AddSuggestion(Suggestion suggestion) => _suggestions.Add(suggestion);
@@ -113,5 +121,12 @@ public class CommitAnalysis : Entity, IAggregateRoot
         _suggestions.AddRange(suggestions);
         
         CalculateChanges();
+        UpdateOverallNote();
+    }
+    
+    private void UpdateOverallNote()
+    {
+        Rating = CalculateOverallRating();
+        OverallNote = Rating?.Note ?? 0.0;
     }
 }

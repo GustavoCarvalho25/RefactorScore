@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using RefactorScore.CrossCutting.IoC.DependenceInjection;
+using RefactorScore.Infrastructure.Configurations;
 using RefactorScore.WorkerService;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
-    .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
     .WriteTo.File("logs/refactorscore-.log", 
@@ -61,6 +61,9 @@ try
         {
             Log.Information("  • {Service}: {Status}", key, value.Status);
         }
+        
+        var indexInitializer = scope.ServiceProvider.GetRequiredService<MongoDbIndexInitializer>();
+        await indexInitializer.InitializeIndexesAsync();
     }
     
     Log.Information("Services configured successfully, starting execution");

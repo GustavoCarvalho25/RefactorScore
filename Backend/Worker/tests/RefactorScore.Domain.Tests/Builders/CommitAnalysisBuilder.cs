@@ -15,6 +15,7 @@ public class CommitAnalysisBuilder
     private string _language = "C#";
     private int _addedLines = 0;
     private int _removedLines = 0;
+    private string _project = "SampleProject";
     private readonly List<CommitFile> _files = new();
     private readonly List<Suggestion> _suggestions = new();
 
@@ -108,7 +109,8 @@ public class CommitAnalysisBuilder
             _analysisDate,
             _language,
             _addedLines,
-            _removedLines
+            _removedLines,
+            _project
         );
 
         foreach (var file in _files)

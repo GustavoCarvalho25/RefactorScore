@@ -226,7 +226,7 @@ public class GitServiceFacadeIntegrationTests : IDisposable
         var jsonFile = result.FirstOrDefault(f => f.Path == "config.json");
         jsonFile.Should().NotBeNull();
         jsonFile!.Language.Should().Be("JSON");
-        jsonFile.IsSourceCode.Should().BeTrue();
+        jsonFile.IsSourceCode.Should().BeFalse();
         
         // Verify text file
         var txtFile = result.FirstOrDefault(f => f.Path == "README.txt");

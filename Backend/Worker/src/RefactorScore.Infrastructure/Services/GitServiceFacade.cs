@@ -48,7 +48,7 @@ public class GitServiceFacade : IGitServiceFacade
                     return null;
                 }
 
-                return _mapper.MapCommitToCommitData(libGitCommit);
+                return _mapper.MapCommitToCommitData(libGitCommit, _repositoryPath);
             });
         }
         catch (Exception e)
@@ -95,7 +95,7 @@ public class GitServiceFacade : IGitServiceFacade
 
         _logger.LogInformation("Found {Count} commits in the specified period", filteredCommits.Count);
             
-        return filteredCommits.Select(c => _mapper.MapCommitToCommitData(c)).ToList();
+        return filteredCommits.Select(c => _mapper.MapCommitToCommitData(c, _repositoryPath)).ToList();
     }
 
     public async Task<List<FileChange>> GetCommitChangesAsync(string commitId)
