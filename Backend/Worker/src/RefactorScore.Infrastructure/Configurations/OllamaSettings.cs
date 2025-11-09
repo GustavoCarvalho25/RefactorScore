@@ -58,12 +58,5 @@ public class OllamaSettings
     /// </summary>
     [Range(5, 60)]
     public int HealthCheckTimeoutSeconds { get; set; } = 30;
-
-    /// <summary>
-    /// Número máximo de análises simultâneas (paralelismo)
-    /// Padrão: 2 (ajuste conforme VRAM disponível da GPU)
-    /// 1 = sequencial, 2-3 = balanceado, 4+ = agressivo
-    /// </summary>
-    [Range(1, 8)]
-    public int MaxConcurrentAnalysis { get; set; } = 2;
+    
 }

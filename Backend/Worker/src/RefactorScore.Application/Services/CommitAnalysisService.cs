@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RefactorScore.Domain.Entities;
 using RefactorScore.Domain.Exceptions;
 using RefactorScore.Domain.Models;
@@ -7,39 +6,28 @@ using RefactorScore.Domain.Repositories;
 using RefactorScore.Domain.Services;
 using RefactorScore.Domain.ValueObjects;
 using RefactorScore.Domain.Enum;
-using RefactorScore.Infrastructure.Configurations;
 
 namespace RefactorScore.Application.Services;
 
 public class CommitAnalysisService : ICommitAnalysisService
 {
-    private readonly ICommitAnalysisRepository _repository;
-    private readonly ILogger<CommitAnalysisService> _logger;
-    private readonly IGitServiceFacade _gitRepository;
-    private readonly ILLMService _illmService;
-    private readonly SemaphoreSlim _semaphore;
+    private ICommitAnalysisRepository _repository;
+    private ILogger<CommitAnalysisService> _logger;
+    private IGitServiceFacade _gitRepository;
+    private ILLMService _illmService;
 
-    public CommitAnalysisService(
-        ICommitAnalysisRepository repository, 
-        ILogger<CommitAnalysisService> logger, 
-        IGitServiceFacade gitRepository, 
-        ILLMService illmService,
-        IOptions<OllamaSettings> ollamaOptions)
+    public CommitAnalysisService(ICommitAnalysisRepository repository, ILogger<CommitAnalysisService> logger, IGitServiceFacade gitRepository, ILLMService illmService)
     {
         _repository = repository;
         _logger = logger;
         _gitRepository = gitRepository;
         _illmService = illmService;
-        
-        var maxConcurrency = ollamaOptions.Value.MaxConcurrentAnalysis;
-        _semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
-        
-        _logger.LogInformation("CommitAnalysisService initialized with MaxConcurrentAnalysis={MaxConcurrency}", maxConcurrency);
     }
 
     public async Task<CommitAnalysis> AnalyzeCommitAsync(string commitId)
     {
         var existing = await _repository.GetByCommitIdAsync(commitId);
+        
         if (existing != null)
         {
             _logger.LogInformation("Commit analysis already exists for commit {CommitId}", commitId);
@@ -68,16 +56,19 @@ public class CommitAnalysisService : ICommitAnalysisService
             commitData.ProjectName
         );
 
-        // Filtrar arquivos válidos para análise
-        var filesToAnalyze = filesChanges
-            .Where(c => c.IsSourceCode)
-            .Where(f => f.ChangeType != FileChangeType.Deleted)
-            .Where(f => !string.IsNullOrWhiteSpace(f.Content))
-            .ToList();
-        
-        // Adicionar arquivos à análise primeiro (sequencial)
-        foreach (var file in filesToAnalyze)
+        foreach (var file in filesChanges.Where(c => c.IsSourceCode))
         {
+            if (file.ChangeType == FileChangeType.Deleted)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(file.Content))
+            {
+                _logger.LogWarning("Skipping file with empty content: {Path} (ChangeType={ChangeType})", file.Path, file.ChangeType);
+                continue;
+            }
+
             var commitFile = new CommitFile(
                 file.Path,
                 file.AddedLines,
@@ -85,20 +76,36 @@ public class CommitAnalysisService : ICommitAnalysisService
                 file.Language,
                 file.Content
             );
+            
             analysis.AddFile(commitFile);
+            
+            var llmResult = await _illmService.AnalyzeFileAsync(file.Content);
+            
+            var rating = new CleanCodeRating(
+                llmResult.VariableScore,
+                llmResult.FunctionScore,
+                llmResult.CommentScore,
+                llmResult.CohesionScore,
+                llmResult.DeadCodeScore,
+                llmResult.Justifications
+            );
+            
+            var llmSuggestions = await _illmService.GenerateSuggestionsAsync(file.Content, rating);
+            
+            var suggestions = llmSuggestions
+                .Select(s => new Suggestion(
+                    s.Title,
+                    s.Description,
+                    s.Priority,
+                    s.Type,
+                    s.Difficulty,
+                    file.Path,
+                    DateTime.UtcNow,
+                    s.StudyResources
+                )).ToList();
+            
+            analysis.CompleteFileAnalysis(file.Path, rating, suggestions);
         }
-        
-        // Processar análises LLM em paralelo
-        var analysisStartTime = DateTime.UtcNow;
-        _logger.LogInformation("Starting parallel analysis of {FileCount} files for commit {CommitId}", 
-            filesToAnalyze.Count, commitId);
-        
-        var analysisTasks = filesToAnalyze.Select(file => AnalyzeFileWithLLMAsync(file, analysis, commitId));
-        await Task.WhenAll(analysisTasks);
-        
-        var analysisElapsed = DateTime.UtcNow - analysisStartTime;
-        _logger.LogInformation("Completed parallel analysis in {ElapsedSeconds:F1}s for commit {CommitId}", 
-            analysisElapsed.TotalSeconds, commitId);
         
         if (analysis.Files.Count == 0)
         {
@@ -121,62 +128,6 @@ public class CommitAnalysisService : ICommitAnalysisService
             "Commit analysis saved successfully for {CommitId}. Files analyzed: {FileCount}, Language: {Language}",
             commitId, analysis.Files.Count, analysis.Language);
         return analysis;
-    }
-
-    private async Task AnalyzeFileWithLLMAsync(FileChange file, CommitAnalysis analysis, string commitId)
-    {
-        await _semaphore.WaitAsync();
-        try
-        {
-            _logger.LogInformation("Analyzing file {FilePath} for commit {CommitId}", file.Path, commitId);
-            var fileStartTime = DateTime.UtcNow;
-            
-            // Análise do arquivo
-            var llmResult = await _illmService.AnalyzeFileAsync(file.Content);
-            
-            var rating = new CleanCodeRating(
-                llmResult.VariableScore,
-                llmResult.FunctionScore,
-                llmResult.CommentScore,
-                llmResult.CohesionScore,
-                llmResult.DeadCodeScore,
-                llmResult.Justifications
-            );
-            
-            // Geração de sugestões
-            var llmSuggestions = await _illmService.GenerateSuggestionsAsync(file.Content, rating);
-            
-            var suggestions = llmSuggestions
-                .Select(s => new Suggestion(
-                    s.Title,
-                    s.Description,
-                    s.Priority,
-                    s.Type,
-                    s.Difficulty,
-                    file.Path,
-                    DateTime.UtcNow,
-                    s.StudyResources
-                )).ToList();
-            
-            // Thread-safe: CompleteFileAnalysis precisa ser sincronizado
-            lock (analysis)
-            {
-                analysis.CompleteFileAnalysis(file.Path, rating, suggestions);
-            }
-            
-            var fileElapsed = DateTime.UtcNow - fileStartTime;
-            _logger.LogInformation("Completed analysis of {FilePath} in {ElapsedSeconds:F1}s", 
-                file.Path, fileElapsed.TotalSeconds);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error analyzing file {FilePath} for commit {CommitId}", file.Path, commitId);
-            throw;
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
     private string DetermineOverallLanguage(List<FileChange> filesChanges)
