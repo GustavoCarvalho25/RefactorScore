@@ -253,7 +253,8 @@ public class CommitAnalysisRepositoryIntegrationTests : IntegrationTestBase
             DateTime.UtcNow,
             "C#",
             0,
-            0 
+            0 ,
+            "TestProject"
         );
         
         var CommitFile1 = new CommitFile("src/TestFile1.cs", 50, 25, "C#", "public class Test { }");
@@ -277,7 +278,8 @@ public class CommitAnalysisRepositoryIntegrationTests : IntegrationTestBase
             DateTime.UtcNow,
             "C#",
             0,
-            0 
+            0 ,
+            "CompleteProject"
         );
 
         var commitFile1 = new CommitFile("src/CompleteFile1.cs", 100, 25, "C#", "public class Complete1 { }");

@@ -21,11 +21,12 @@ public class CommitAnalysisTests
         var language = "C#";
         var addedLines = 100;
         var removedLines = 50;
+        var project = "SampleProject";
 
         // Act
         var analysis = new CommitAnalysis(
             commitId, author, email, commitDate, 
-            analysisDate, language, addedLines, removedLines);
+            analysisDate, language, addedLines, removedLines, project);
 
         // Assert
         analysis.CommitId.Should().Be(commitId);
@@ -36,6 +37,7 @@ public class CommitAnalysisTests
         analysis.Language.Should().Be(language);
         analysis.AddedLines.Should().Be(addedLines);
         analysis.RemovedLines.Should().Be(removedLines);
+        analysis.Project.Should().Be(project);
         analysis.Files.Should().BeEmpty();
         analysis.Suggestions.Should().BeEmpty();
         analysis.Rating.Should().BeNull();
@@ -192,7 +194,7 @@ public class CommitAnalysisTests
         // Arrange & Act & Assert
         var action = () => new CommitAnalysis(
             invalidCommitId, "author", "email@test.com", 
-            DateTime.UtcNow, DateTime.UtcNow, "C#", 0, 0);
+            DateTime.UtcNow, DateTime.UtcNow, "C#", 0, 0, "project");
 
         action.Should().Throw<ArgumentException>();
     }
