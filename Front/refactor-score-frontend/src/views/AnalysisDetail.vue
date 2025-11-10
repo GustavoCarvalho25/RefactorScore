@@ -145,6 +145,7 @@
     </div>
   </div>
 </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -258,26 +259,14 @@ const loadAnalysis = async () => {
     if (apiError.value) {
       error.value = 'Erro ao carregar análise';
       console.error('Error loading analysis:', apiError.value);
-    } else if (result.value?.success && Array.isArray(result.value.analysis)) {
-      // Filtra a análise específica pelo ID
-      const selectedAnalysis = result.value.analysis.find((a: CommitAnalysis) => a.id === id);
-      if (selectedAnalysis) {
-        analyses.value = [selectedAnalysis];
-      } else {
-        error.value = 'Análise não encontrada';
-      }
+    } else if (result.value?.success && result.value.data) {
+      // Novo formato: retorna um único objeto em data
+      analyses.value = [result.value.data];
     } else {
       error.value = 'Formato de resposta inválido';
+      console.error('Formato inesperado:', result.value);
     }
     console.log('Análises carregadas:', analyses.value);
-  } catch (err) {
-    error.value = 'Erro ao carregar análise';
-    console.error('Error loading analysis:', err);
-  } finally {
-    loading.value = false;
-  }
-};
-    }
   } catch (err) {
     error.value = 'Erro ao carregar análise';
     console.error('Error loading analysis:', err);

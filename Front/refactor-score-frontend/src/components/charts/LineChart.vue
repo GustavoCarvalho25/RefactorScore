@@ -27,6 +27,7 @@ interface Props {
   // NOVAS PROPS PARA O FILTRO DE DATA
   startDate?: string; // Data de início do filtro (ex: 'YYYY-MM-DD')
   endDate?: string;   // Data de fim do filtro (ex: 'YYYY-MM-DD')
+  onPointClick?: (datasetIndex: number, pointIndex: number) => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -35,6 +36,7 @@ const props = withDefaults(defineProps<Props>(), {
   yAxisMax: undefined,
   startDate: undefined,
   endDate: undefined,
+  onPointClick: undefined,
 });
 
 const { isDark } = useTheme();
@@ -144,6 +146,12 @@ const chartOptions = computed(() => {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    onClick: (event: any, elements: any[]) => {
+      if (elements.length > 0 && props.onPointClick) {
+        const element = elements[0];
+        props.onPointClick(element.datasetIndex, element.index);
+      }
+    },
     plugins: {
       legend: {
         display: true,

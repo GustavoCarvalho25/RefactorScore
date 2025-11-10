@@ -2,7 +2,7 @@ import express from 'express' // Importa o valor runtime do Express (a função 
 import type { Request, Response } from 'express' // Importa APENAS os tipos para TypeScript
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { MongoClient } from 'mongodb'
+import { MongoClient, ObjectId } from 'mongodb'
 
 dotenv.config()
 
@@ -245,8 +245,7 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
         };
 
         return {
-          id: commit._id,
-          commitId: commit.commitId || null,
+          id: commit.CommitId || commit.commitId,
           commitDate: extractDate(commit.commitDate),
           analysisDate: extractDate(commit.analysisDate),
           note: commit.note || 0
@@ -523,6 +522,109 @@ app.get('/api/v1/projects', (req: Request, res: Response) => {
       res.status(500).json({ 
         success: false, 
         error: 'Erro ao buscar projetos', 
+        message: error.message 
+      });
+    } finally {
+      await client.close();
+    }
+  })();
+});
+
+// Endpoint para buscar análise por ID
+app.get('/api/v1/analysis/:id', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+      
+      const { id } = req.params;
+      
+      // Buscar por CommitId (hash do commit do Git)
+      const doc = await collection.findOne({ CommitId: id });
+      
+      if (!doc) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Análise não encontrada' 
+        });
+      }
+      
+      // Processar o documento EXATAMENTE como o endpoint de lista
+      const filesArr: any[] = doc.Files ?? doc.files ?? [];
+      const filesDetails = (filesArr || []).map((f: any) => {
+        const rating = f.Rating ?? f.rating ?? {};
+        const fv1 = rating.VariableNaming ?? rating.variableNaming ?? 0;
+        const fv2 = rating.FunctionSizes ?? rating.functionSizes ?? 0;
+        const fv3 = rating.NoNeedsComments ?? rating.noNeedsComments ?? 0;
+        const fv4 = rating.MethodCohesion ?? rating.methodCohesion ?? 0;
+        const fv5 = rating.DeadCode ?? rating.deadCode ?? 0;
+        const perFileSum = (Number(fv1) || 0) + (Number(fv2) || 0) + (Number(fv3) || 0) + (Number(fv4) || 0) + (Number(fv5) || 0);
+
+        const justifications = rating.Justifications ?? rating.justifications ?? {};
+        const suggestions = (f.Suggestions ?? f.suggestions ?? []).map((s: any) => ({
+          title: s.Title ?? s.title,
+          description: s.Description ?? s.description,
+          priority: s.Priority ?? s.priority,
+          type: s.Type ?? s.type,
+          difficult: s.Difficult ?? s.difficult,
+          fileReference: s.FileReference ?? s.fileReference,
+          lastUpdate: s.LastUpdate ?? s.lastUpdate,
+          studyResources: s.StudyResources ?? s.studyResources ?? []
+        }));
+
+        return {
+          fileId: f._id ?? f.id ?? null,
+          path: f.Path ?? f.path,
+          language: f.Language ?? f.language,
+          addedLines: f.AddedLines ?? f.addedLines ?? 0,
+          removedLines: f.RemovedLines ?? f.removedLines ?? 0,
+          content: f.Content ?? f.content,
+          rating: {
+            variableNaming: fv1,
+            functionSizes: fv2,
+            noNeedsComments: fv3,
+            methodCohesion: fv4,
+            deadCode: fv5,
+            note: rating.Note ?? rating.note ?? 0,
+            quality: rating.Quality ?? rating.quality ?? 'Unknown',
+            justifications: {
+              variableNaming: justifications.VariableNaming ?? justifications.variableNaming,
+              functionSizes: justifications.FunctionSizes ?? justifications.functionSizes,
+              noNeedsComments: justifications.NoNeedsComments ?? justifications.noNeedsComments,
+              methodCohesion: justifications.MethodCohesion ?? justifications.methodCohesion,
+              deadCode: justifications.DeadCode ?? justifications.deadCode
+            }
+          },
+          suggestions,
+          perFileSum,
+        };
+      });
+
+      const totalFiles = filesDetails.length;
+      const commitNote = doc.Rating?.Note ?? doc.rating?.note ?? doc.OverallNote ?? doc.overallNote ?? doc.pontuacaoRefatoracao ?? 0;
+
+      const result = {
+        id: doc._id.toString(),
+        author: doc.Author ?? doc.author ?? 'Unknown',
+        commitId: doc.CommitId ?? doc.commitId,
+        analysisDate: doc.AnalysisDate ?? doc.analysisDate,
+        OverallNote: doc.OverallNote ?? doc.overallNote ?? 0,
+        filesDetails
+      };
+
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('Erro ao buscar análise:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao buscar análise', 
         message: error.message 
       });
     } finally {

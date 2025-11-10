@@ -64,6 +64,7 @@
                 :datasets="lineChartData.datasets"
                 :y-axis-step-size="1"
                 :y-axis-max="10"
+                :on-point-click="handlePointClick"
                 title="Evolução das Notas dos Commits ao Longo do Tempo"
               />
             </template>
@@ -80,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'; // Adicionado 'watch'
+import { ref, computed, onMounted, watch } from 'vue'; 
 import { useRouter } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { useDashboardService } from '../server/api/dashboardService';
@@ -94,6 +95,7 @@ const dashboardService = useDashboardService();
 const analysisService = useAnalysisService();
 
 interface CommitEvolution {
+  id: string;
   commitDate: string;
   note: number;
 }
@@ -120,6 +122,8 @@ const filterEndDate = ref<string>('');
 // LÓGICA DO GRÁFICO DE LINHA (INCLUINDO FILTRO)
 // Referência para forçar recriação do gráfico
 const chartKey = ref(0);
+// Armazena os commits filtrados para acessar pelo índice
+const filteredCommits = ref<CommitEvolution[]>([]);
 
 // Computed para processar os dados do gráfico
 const lineChartData = computed(() => {
@@ -204,6 +208,9 @@ const lineChartData = computed(() => {
 
     // 3. Ordenar por data
     commits.sort((a, b) => new Date(a.commitDate).getTime() - new Date(b.commitDate).getTime());
+
+    // Armazenar commits filtrados para uso no click
+    filteredCommits.value = commits;
 
     // 4. Preparar dados para o gráfico
     const dates = commits.map(commit => formatDate(commit.commitDate));
@@ -295,6 +302,15 @@ const getScoreClass = (score: number) => {
 
 const goToAnalysis = (id: string) => {
   router.push({ name: 'AnalysisDetail', params: { id } });
+};
+
+// Função para lidar com clique em ponto do gráfico
+const handlePointClick = (datasetIndex: number, pointIndex: number) => {
+  const commit = filteredCommits.value[pointIndex];
+  if (commit && commit.id) {
+    console.log('Navegando para análise do commit:', commit.id);
+    router.push({ name: 'Analysis', query: { commitId: commit.id } });
+  }
 };
 
 const loadAnalyses = async () => {

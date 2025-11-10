@@ -3,12 +3,18 @@
     <header class="page-header">
       <h1>Análises de Commits</h1>
       <div class="filters">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Buscar por autor ou commit..."
-          class="search-input"
-        />
+        <div class="search-container">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Buscar por autor ou commit..."
+            class="search-input"
+            @keyup.enter="searchByCommitId"
+          />
+          <button @click="searchByCommitId" class="search-button" title="Buscar">
+            🔍
+          </button>
+        </div>
         <select v-model="selectedLanguage" class="language-filter">
           <option value="">Todas as linguagens</option>
           <option v-for="lang in languages" :key="lang" :value="lang">
@@ -125,10 +131,25 @@
                   >
                     <div class="suggestion-header">
                       <h3>{{ suggestion.title }}</h3>
-                      <div class="suggestion-badges">
-                        <span class="badge priority">{{ suggestion.priority }}</span>
-                        <span class="badge difficulty">{{ suggestion.difficult }}</span>
-                        <span class="badge type">{{ suggestion.type }}</span>
+                    </div>
+                    <div class="suggestion-meta">
+                      <div class="meta-item">
+                        <span class="meta-label">Prioridade:</span>
+                        <span class="badge priority" :class="`priority-${suggestion.priority.toLowerCase()}`">
+                          {{ translatePriority(suggestion.priority) }}
+                        </span>
+                      </div>
+                      <div class="meta-item">
+                        <span class="meta-label">Dificuldade:</span>
+                        <span class="badge difficulty" :class="`difficulty-${suggestion.difficult.toLowerCase()}`">
+                          {{ translateDifficulty(suggestion.difficult) }}
+                        </span>
+                      </div>
+                      <div class="meta-item">
+                        <span class="meta-label">Tipo:</span>
+                        <span class="badge type">
+                          {{ translateType(suggestion.type) }}
+                        </span>
                       </div>
                     </div>
                     <p class="suggestion-description">{{ suggestion.description }}</p>
@@ -162,7 +183,7 @@
   </div>
 </template><script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
 import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
@@ -171,6 +192,7 @@ import DiffViewer from '../components/DiffViewer.vue';
 
 
 const router = useRouter();
+const route = useRoute();
 const analysisStore = useAnalysisStore();
 const analysisService = useAnalysisService();
 
@@ -287,6 +309,40 @@ const getScoreClass = (score: number) => {
   if (score >= 6) return 'score-good';
   if (score >= 5) return 'score-acceptable';
   return 'score-needs-improvement';
+};
+
+// Funções de tradução para badges
+const translatePriority = (priority: string): string => {
+  const translations: Record<string, string> = {
+    'Low': 'Baixa',
+    'Medium': 'Média',
+    'High': 'Alta',
+  };
+  return translations[priority] || priority;
+};
+
+const translateDifficulty = (difficulty: string): string => {
+  const translations: Record<string, string> = {
+    'Easy': 'Fácil',
+    'Medium': 'Média',
+    'Hard': 'Difícil',
+  };
+  return translations[difficulty] || difficulty;
+};
+
+const translateType = (type: string): string => {
+  const translations: Record<string, string> = {
+    'DeadCode': 'Código Morto',
+    'Documentation': 'Documentação',
+    'Naming': 'Nomenclatura',
+    'Structure': 'Estrutura',
+    'Cohesion': 'Coesão',
+    'Refactoring': 'Refatoração',
+    'CodeStyle': 'Estilo de Código',
+    'Performance': 'Performance',
+    'Security': 'Segurança',
+  };
+  return translations[type] || type;
 };
 
 const toggleCommit = (commitId: string) => {
@@ -445,8 +501,64 @@ const loadAnalyses = async () => {
   }
 };
 
+// Função para buscar por CommitId específico
+const searchByCommitId = async () => {
+  const commitId = searchQuery.value.trim();
+  
+  if (!commitId) {
+    // Se não houver busca, carrega todas as análises
+    loadAnalyses();
+    return;
+  }
+  
+  loading.value = true;
+  error.value = null;
+  
+  try {
+    // Tenta buscar pelo endpoint específico de CommitId
+    const { result, error: apiError } = await analysisService.getAnalysisById(commitId);
+    
+    if (apiError.value) {
+      console.error('Erro ao buscar por CommitId:', apiError.value);
+      // Se falhar, tenta buscar na lista geral
+      loadAnalyses();
+    } else if (result.value?.success && result.value.data) {
+      // Sucesso: encontrou a análise específica (já no formato correto)
+      const data = result.value.data;
+      
+      analyses.value = [data];
+      console.log('Análise encontrada:', data);
+      
+      // Expande automaticamente o commit encontrado
+      const foundCommitId = data.commitId || data.id;
+      if (foundCommitId) {
+        expandedCommits.value.add(foundCommitId);
+      }
+    } else {
+      // Se não encontrou, busca na lista geral (filtro por texto)
+      loadAnalyses();
+    }
+  } catch (err) {
+    console.error('Erro na busca:', err);
+    // Em caso de erro, tenta buscar na lista geral
+    loadAnalyses();
+  } finally {
+    loading.value = false;
+  }
+};
+
 onMounted(() => {
-  loadAnalyses();
+  // Verificar se há commitId na query string
+  const commitId = route.query.commitId as string;
+  if (commitId) {
+    searchQuery.value = commitId;
+    console.log('Buscando commit:', commitId);
+    // Executa busca específica pelo CommitId
+    searchByCommitId();
+  } else {
+    // Carrega lista geral
+    loadAnalyses();
+  }
 });
 </script>
 
@@ -656,6 +768,13 @@ onMounted(() => {
     flex-wrap: wrap;
   }
 
+  .search-container {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 300px;
+  }
+
   .search-input,
   .language-filter {
     padding: 0.75rem 1rem;
@@ -674,7 +793,30 @@ onMounted(() => {
 
   .search-input {
     flex: 1;
-    min-width: 300px;
+    min-width: 200px;
+  }
+
+  .search-button {
+    padding: 0.75rem 1.5rem;
+    background: var(--card-background);
+    color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
   }
 
   .language-filter {
@@ -1019,5 +1161,126 @@ onMounted(() => {
     font-family: monospace;
     margin-bottom: 0.5rem;
   }
+}
+
+.suggestions-container {
+  margin-top: 1rem;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.suggestion-card {
+  background: var(--card-background);
+  border-radius: 8px;
+  padding: 1.5rem;
+  border-left: 4px solid var(--border-color);
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px var(--shadow-color);
+  }
+}
+
+.suggestion-header {
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+  }
+}
+
+.suggestion-meta {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.meta-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.badge {
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+// Priority badges - usando cores consistentes com score
+.badge.priority-low {
+  color: #27ae60;
+  background: rgba(39, 174, 96, 0.15);
+}
+
+.badge.priority-medium {
+  color: #f39c12;
+  background: rgba(243, 156, 18, 0.15);
+}
+
+.badge.priority-high {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.15);
+}
+
+// Difficulty badges
+.badge.difficulty-easy {
+  color: #27ae60;
+  background: rgba(39, 174, 96, 0.15);
+}
+
+.badge.difficulty-medium {
+  color: #f39c12;
+  background: rgba(243, 156, 18, 0.15);
+}
+
+.badge.difficulty-hard {
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.15);
+}
+
+.badge.type {
+  color: var(--text-primary);
+  background: var(--border-color);
+}
+
+.suggestion-description {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.suggestion-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.file-ref {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--background);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
 }
 </style>
