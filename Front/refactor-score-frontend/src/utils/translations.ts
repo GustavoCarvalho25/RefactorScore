@@ -2,10 +2,13 @@
 export const qualityTranslations: Record<string, string> = {
   'Excellent': 'Excelente',
   'Very Good': 'Muito Bom',
+  'VeryGood': 'Muito Bom',
   'Good': 'Bom',
   'Acceptable': 'Aceitável',
   'Needs Improvement': 'Precisa Melhorar',
-  'Problematic': 'Problemático'
+  'NeedsImprovement': 'Precisa Melhorar',
+  'Problematic': 'Problemático',
+  'Unknown': 'Desconhecido'
 };
 
 export const metricTranslations: Record<string, string> = {

@@ -48,7 +48,7 @@
               <div class="overall-score" :class="getScoreClass(getOverallNote(analysis))">
                 <h2>Nota Geral</h2>
                 <div class="score-value">{{ getOverallNote(analysis).toFixed(2) }}</div>
-                <div class="score-quality">{{ getFirstFileRating(analysis)?.quality || 'N/A' }}</div>
+                <div class="score-quality">{{ getFirstFileRating(analysis)?.quality ? translateQuality(getFirstFileRating(analysis).quality) : 'N/A' }}</div>
               </div>
 
               <div class="metrics">
@@ -90,23 +90,23 @@
                   </div>
                   <div v-if="file.rating" class="file-rating">
                     <div class="rating-item">
-                      <span>Variable Naming:</span>
+                      <span>{{ translateMetric('Variable Naming') }}:</span>
                       <span class="rating-value">{{ file.rating?.variableNaming ?? 'N/A' }}/10</span>
                     </div>
                     <div class="rating-item">
-                      <span>Function Sizes:</span>
+                      <span>{{ translateMetric('Function Sizes') }}:</span>
                       <span class="rating-value">{{ file.rating?.functionSizes ?? 'N/A' }}/10</span>
                     </div>
                     <div class="rating-item">
-                      <span>No Needs Comments:</span>
+                      <span>{{ translateMetric('No Needs Comments') }}:</span>
                       <span class="rating-value">{{ file.rating?.noNeedsComments ?? 'N/A' }}/10</span>
                     </div>
                     <div class="rating-item">
-                      <span>Method Cohesion:</span>
+                      <span>{{ translateMetric('Method Cohesion') }}:</span>
                       <span class="rating-value">{{ file.rating?.methodCohesion ?? 'N/A' }}/10</span>
                     </div>
                     <div class="rating-item">
-                      <span>Dead Code:</span>
+                      <span>{{ translateMetric('Dead Code') }}:</span>
                       <span class="rating-value">{{ file.rating?.deadCode ?? 'N/A' }}/10</span>
                     </div>
                   </div>
@@ -189,6 +189,7 @@ import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
 import { Suggestion } from '../interfaces/Suggestion';
 import DiffViewer from '../components/DiffViewer.vue';
+import { translateQuality, translateMetric } from '../utils/translations';
 
 
 const router = useRouter();
