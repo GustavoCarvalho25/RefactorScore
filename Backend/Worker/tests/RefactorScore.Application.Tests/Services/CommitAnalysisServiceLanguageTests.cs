@@ -34,7 +34,8 @@ public class CommitAnalysisServiceLanguageTests
         Id = id,
         Author = "Tester",
         Email = "tester@example.com",
-        Date = DateTime.UtcNow
+        Date = DateTime.UtcNow,
+        ProjectName = "TestProject"
     };
 
     [Fact]

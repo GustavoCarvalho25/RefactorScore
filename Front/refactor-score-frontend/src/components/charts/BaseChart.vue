@@ -5,15 +5,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, watch, ref } from 'vue';
+import { onMounted, onBeforeUnmount, watch, ref, nextTick } from 'vue';
 import {
   Chart,
   ChartConfiguration,
   ChartType,
   registerables,
 } from 'chart.js';
+import { useTheme } from '../../composables/useTheme';
 
 Chart.register(...registerables);
+
+const { isDark } = useTheme();
 
 interface Props {
   chartId: string;
@@ -35,10 +38,41 @@ const createChart = () => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const defaultOptions = {
+    plugins: {
+      legend: {
+        labels: {
+          color: isDark.value ? '#ffffff' : '#2c3e50'
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: isDark.value ? '#a0a0a0' : '#7f8c8d'
+        },
+        grid: {
+          color: isDark.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
+      },
+      y: {
+        ticks: {
+          color: isDark.value ? '#a0a0a0' : '#7f8c8d'
+        },
+        grid: {
+          color: isDark.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
+      }
+    }
+  };
+
   chartInstance.value = new Chart(ctx, {
     type: props.type,
     data: props.data,
-    options: props.options,
+    options: {
+      ...defaultOptions,
+      ...props.options,
+    },
   });
 };
 
@@ -56,6 +90,12 @@ const updateChart = () => {
   }
 };
 
+const recreateChart = async () => {
+  destroyChart();
+  await nextTick();
+  createChart();
+};
+
 onMounted(() => {
   createChart();
 });
@@ -71,6 +111,18 @@ watch(
   },
   { deep: true }
 );
+
+watch(
+  () => props.options,
+  () => {
+    recreateChart();
+  },
+  { deep: true }
+);
+
+watch(isDark, () => {
+  recreateChart();
+});
 </script>
 
 <style scoped lang="scss">
@@ -78,6 +130,13 @@ watch(
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 300px;
+  max-width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  
+  canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
+  }
 }
 </style>

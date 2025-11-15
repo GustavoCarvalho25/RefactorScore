@@ -5,6 +5,7 @@ public class CommitData
     public string Id { get; set; }
     public string Author { get; set; }
     public string Email { get; set; }
+    public string ProjectName { get; set; }
     public DateTime Date { get; set; }
     public string Message { get; set; }
     public string MessageShort { get; set; }

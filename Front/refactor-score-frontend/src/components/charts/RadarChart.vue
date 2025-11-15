@@ -11,28 +11,30 @@
 import { computed } from 'vue';
 import BaseChart from './BaseChart.vue';
 import { CleanCodeRating } from '../../interfaces/CleanCodeRating';
+import { useTheme } from '../../composables/useTheme';
+import { translateMetric } from '../../utils/translations';
 
-interface Props {
+const props = defineProps<{
   chartId: string;
   rating: CleanCodeRating;
   title?: string;
-}
+}>();
 
-const props = withDefaults(defineProps<Props>(), {
-  title: 'Clean Code Rating',
-});
+const title = props.title ?? 'Clean Code Rating';
+
+const { isDark } = useTheme();
 
 const chartData = computed(() => ({
   labels: [
-    'Variable Naming',
-    'Function Sizes',
-    'No Needs Comments',
-    'Method Cohesion',
-    'Dead Code',
+    translateMetric('Variable Naming'),
+    translateMetric('Function Sizes'),
+    translateMetric('No Needs Comments'),
+    translateMetric('Method Cohesion'),
+    translateMetric('Dead Code'),
   ],
   datasets: [
     {
-      label: props.title,
+      label: title,
       data: [
         props.rating.variableNaming,
         props.rating.functionSizes,
@@ -51,27 +53,59 @@ const chartData = computed(() => ({
   ],
 }));
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  scales: {
-    r: {
-      beginAtZero: true,
-      max: 10,
-      ticks: {
-        stepSize: 2,
+const chartOptions = computed(() => {
+  const textColor = isDark.value ? '#ffffff' : '#2c3e50';
+  const gridColor = isDark.value ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
+  
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 10,
+        ticks: {
+          stepSize: 2,
+          color: textColor,
+          backdropColor: isDark.value ? 'rgba(22, 33, 62, 0.95)' : '#ffffff',
+          font: {
+            weight: 'bold' as const
+          }
+        },
+        grid: {
+          color: gridColor,
+        },
+        pointLabels: {
+          color: textColor,
+          font: {
+            size: 12,
+          },
+        },
+        angleLines: {
+          color: gridColor
+        },
       },
     },
-  },
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top' as const,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top' as const,
+        labels: {
+          color: textColor,
+          font: {
+            size: 12,
+          },
+        },
+      },
+      title: {
+        display: true,
+        text: title,
+        color: textColor,
+        font: {
+          size: 16,
+        },
+      },
     },
-    title: {
-      display: true,
-      text: props.title,
-    },
-  },
-}));
+  };
+});
 </script>

@@ -4,51 +4,61 @@
 
     <div v-else-if="error" class="error">{{ error }}</div>
 
-    <div v-else-if="analysis" class="detail-content">
+    <div v-else-if="analyses.length > 0" class="detail-content">
       <header class="detail-header">
         <button @click="goBack" class="back-button">← Voltar</button>
         <div class="header-info">
-          <h1>Análise do Commit {{ analysis.commitId.substring(0, 8) }}</h1>
+          <h1>Análises de Commits</h1>
           <div class="meta-info">
-            <span class="author">{{ analysis.author }}</span>
-            <span class="date">{{ formatDate(analysis.commitDate) }}</span>
-            <span class="language-badge">{{ analysis.language }}</span>
+            <span class="total-commits">{{ analyses.length }} commits analisados</span>
           </div>
         </div>
       </header>
 
+      <!-- Container para cada commit -->
+      <div v-for="(analysis, index) in analyses" :key="analysis.id" class="commit-container">
+        <div class="analysis-container">
+          <div class="commit-header">
+            <h2>Commit {{ analysis.commitId ? analysis.commitId.substring(0, 8) : 'N/A' }}</h2>
+            <div class="commit-meta">
+              <span class="author" v-if="analysis.author">{{ analysis.author }}</span>
+              <span class="date" v-if="analysis.analysisDate">{{ formatDate(analysis.analysisDate) }}</span>
+              <span class="language-badge" v-if="getFirstLanguage(analysis)">{{ getFirstLanguage(analysis) }}</span>
+            </div>
+          </div>
+
       <div class="score-section">
-        <div class="overall-score" :class="getScoreClass(analysis.overallNote)">
+        <div class="overall-score" :class="getScoreClass(getOverallNote(analysis))">
           <h2>Nota Geral</h2>
-          <div class="score-value">{{ analysis.overallNote.toFixed(2) }}</div>
-          <div class="score-quality">{{ analysis.rating?.quality }}</div>
+          <div class="score-value">{{ getOverallNote(analysis).toFixed(2) }}</div>
+          <div class="score-quality">{{ getFirstFileRating(analysis)?.quality || 'N/A' }}</div>
         </div>
 
         <div class="metrics">
           <div class="metric">
             <span class="metric-label">Arquivos</span>
-            <span class="metric-value">{{ analysis.files.length }}</span>
+            <span class="metric-value">{{ getAnalysisFiles(analysis).length }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Linhas Adicionadas</span>
-            <span class="metric-value added">+{{ analysis.addedLines }}</span>
+            <span class="metric-value added">+{{ getTotalAddedLines(analysis) }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Linhas Removidas</span>
-            <span class="metric-value removed">-{{ analysis.removedLines }}</span>
+            <span class="metric-value removed">-{{ getTotalRemovedLines(analysis) }}</span>
           </div>
           <div class="metric">
             <span class="metric-label">Sugestões</span>
-            <span class="metric-value">{{ analysis.suggestions.length }}</span>
+            <span class="metric-value">{{ getAnalysisSuggestions(analysis).length }}</span>
           </div>
         </div>
       </div>
 
-      <div v-if="analysis.rating" class="rating-chart">
+      <div v-if="getFirstFileRating(analysis)" class="rating-chart">
         <h2>Avaliação Clean Code</h2>
         <RadarChart
-          chart-id="analysis-rating"
-          :rating="analysis.rating"
+          :chart-id="`analysis-rating-${analysis.id}`"
+          :rating="getFirstFileRating(analysis)!"
           title="Métricas de Qualidade"
         />
       </div>
@@ -57,10 +67,10 @@
         <h2>Arquivos Analisados</h2>
         <div class="files-list">
           <div
-            v-for="file in analysis.files"
-            :key="file.id"
+            v-for="file in getAnalysisFiles(analysis)"
+            :key="file.fileId || file.id"
             class="file-card"
-            :class="{ 'has-analysis': file.hasAnalysis }"
+            :class="{ 'has-analysis': file.rating }"
           >
             <div class="file-header">
               <h3>{{ file.path }}</h3>
@@ -70,7 +80,7 @@
               <span class="stat added">+{{ file.addedLines }}</span>
               <span class="stat removed">-{{ file.removedLines }}</span>
             </div>
-            <div v-if="file.hasAnalysis && file.rating" class="file-rating">
+            <div v-if="file.rating" class="file-rating">
               <div class="rating-item">
                 <span>Variable Naming:</span>
                 <span class="rating-value">{{ file.rating.variableNaming }}/10</span>
@@ -96,11 +106,11 @@
         </div>
       </div>
 
-      <div v-if="analysis.suggestions.length > 0" class="suggestions-section">
+      <div v-if="getAnalysisSuggestions(analysis).length > 0" class="suggestions-section">
         <h2>Sugestões de Melhoria</h2>
         <div class="suggestions-list">
           <div
-            v-for="(suggestion, index) in analysis.suggestions"
+            v-for="(suggestion, index) in getAnalysisSuggestions(analysis)"
             :key="index"
             class="suggestion-card"
             :class="`priority-${suggestion.priority.toLowerCase()}`"
@@ -116,16 +126,16 @@
             <p class="suggestion-description">{{ suggestion.description }}</p>
             <div class="suggestion-footer">
               <span class="file-ref">{{ suggestion.fileReference }}</span>
-              <div v-if="suggestion.studyResources.length > 0" class="resources">
+              <div v-if="suggestion.studyResources && suggestion.studyResources.length > 0" class="resources">
                 <span>Recursos:</span>
                 <a
                   v-for="(resource, idx) in suggestion.studyResources"
                   :key="idx"
-                  :href="resource"
-                  target="_blank"
+                  :href="typeof resource === 'string' && resource.startsWith('http') ? resource : '#'"
+                  :target="typeof resource === 'string' && resource.startsWith('http') ? '_blank' : undefined"
                   class="resource-link"
                 >
-                  Link {{ idx + 1 }}
+                  {{ typeof resource === 'string' && resource.startsWith('http') ? `Link ${idx + 1}` : resource }}
                 </a>
               </div>
             </div>
@@ -134,6 +144,8 @@
       </div>
     </div>
   </div>
+</div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -141,15 +153,73 @@ import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
+import { Suggestion } from '../interfaces/Suggestion';
+import { ApiResponse } from '../interfaces/ApiResponse';
 import RadarChart from '../components/charts/RadarChart.vue';
 
 const router = useRouter();
 const route = useRoute();
 const analysisService = useAnalysisService();
 
-const analysis = ref<CommitAnalysis | null>(null);
+const analyses = ref<CommitAnalysis[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
+
+const getFirstLanguage = (analysis: CommitAnalysis): string => {
+  const files = getAnalysisFiles(analysis);
+  return files[0]?.language || 'N/A';
+};
+
+const getOverallNote = (analysis: CommitAnalysis): number => {
+  // Usar o campo note diretamente da análise
+  if (typeof analysis.note === 'number') {
+    return analysis.note;
+  }
+  
+  return 0;
+};
+
+const getFirstFileRating = (analysis: CommitAnalysis) => {
+  if (analysis.filesDetails && analysis.filesDetails.length > 0) {
+    return analysis.filesDetails[0]?.rating;
+  }
+  if (analysis.files && analysis.files.length > 0) {
+    return analysis.files[0]?.rating;
+  }
+  return null;
+};
+
+const getAnalysisFiles = (analysis: CommitAnalysis) => {
+  return analysis.filesDetails || analysis.files || [];
+};
+
+const getAnalysisSuggestions = (analysis: CommitAnalysis) => {
+  // Agregador de sugestões de todos os arquivos
+  if (analysis.filesDetails) {
+    return analysis.filesDetails.reduce((allSuggestions: Suggestion[], file) => {
+      if (file.suggestions) {
+        allSuggestions.push(...file.suggestions);
+      }
+      return allSuggestions;
+    }, []);
+  }
+  
+  if (analysis.suggestions) {
+    return analysis.suggestions;
+  }
+  
+  return [];
+};
+
+const getTotalAddedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.addedLines || 0), 0);
+};
+
+const getTotalRemovedLines = (analysis: CommitAnalysis): number => {
+  const files = getAnalysisFiles(analysis);
+  return files.reduce((total, file) => total + (file.removedLines || 0), 0);
+};
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -189,9 +259,14 @@ const loadAnalysis = async () => {
     if (apiError.value) {
       error.value = 'Erro ao carregar análise';
       console.error('Error loading analysis:', apiError.value);
-    } else if (result.value) {
-      analysis.value = result.value.data;
+    } else if (result.value?.success && result.value.data) {
+      // Novo formato: retorna um único objeto em data
+      analyses.value = [result.value.data];
+    } else {
+      error.value = 'Formato de resposta inválido';
+      console.error('Formato inesperado:', result.value);
     }
+    console.log('Análises carregadas:', analyses.value);
   } catch (err) {
     error.value = 'Erro ao carregar análise';
     console.error('Error loading analysis:', err);
@@ -212,15 +287,70 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.commit-container {
+  background: var(--card-background);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  margin-bottom: 2rem;
+  padding: 2rem;
+  transition: all 0.3s ease;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.commit-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+
+  h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    font-family: monospace;
+    transition: color 0.3s ease;
+  }
+
+  .commit-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+
+    .author {
+      font-weight: 500;
+    }
+
+    .date {
+      opacity: 0.8;
+    }
+
+    .language-badge {
+      padding: 0.25rem 0.75rem;
+      background: var(--primary-color);
+      color: white;
+      border-radius: 12px;
+      font-size: 0.85rem;
+    }
+  }
+}
+
 .loading,
 .error {
   text-align: center;
   padding: 3rem;
   font-size: 1.1rem;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
 }
 
 .error {
-  color: #e74c3c;
+  color: var(--danger-color);
 }
 
 .detail-header {
@@ -229,7 +359,7 @@ onMounted(() => {
   .back-button {
     background: none;
     border: none;
-    color: #447bda;
+    color: var(--primary-color);
     font-size: 1rem;
     cursor: pointer;
     padding: 0.5rem 0;
@@ -237,14 +367,15 @@ onMounted(() => {
     transition: color 0.3s ease;
 
     &:hover {
-      color: #2c5aa0;
+      opacity: 0.8;
     }
   }
 
   h1 {
     font-size: 2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
+    transition: color 0.3s ease;
   }
 
   .meta-info {
@@ -255,16 +386,18 @@ onMounted(() => {
 
     .author {
       font-weight: 500;
-      color: #2c3e50;
+      color: var(--text-primary);
+      transition: color 0.3s ease;
     }
 
     .date {
-      color: #7f8c8d;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
     }
 
     .language-badge {
       padding: 0.25rem 0.75rem;
-      background: #447bda;
+      background: var(--primary-color);
       color: white;
       border-radius: 12px;
       font-size: 0.85rem;
@@ -284,16 +417,18 @@ onMounted(() => {
 }
 
 .overall-score {
-  background: white;
+  background: var(--card-background);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   text-align: center;
+  transition: all 0.3s ease;
 
   h2 {
     font-size: 1.2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 
   .score-value {
@@ -316,46 +451,51 @@ onMounted(() => {
 }
 
 .metric {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   text-align: center;
+  transition: all 0.3s ease;
 
   .metric-label {
     display: block;
     font-size: 0.85rem;
-    color: #7f8c8d;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
     text-transform: uppercase;
+    transition: color 0.3s ease;
   }
 
   .metric-value {
     font-size: 2rem;
     font-weight: bold;
-    color: #2c3e50;
+    color: var(--text-primary);
+    transition: color 0.3s ease;
 
     &.added {
-      color: #27ae60;
+      color: var(--success-color);
     }
 
     &.removed {
-      color: #e74c3c;
+      color: var(--danger-color);
     }
   }
 }
 
 .rating-chart {
-  background: white;
+  background: var(--card-background);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
   margin-bottom: 2rem;
   min-height: 500px;
+  transition: all 0.3s ease;
 
   h2 {
     margin-bottom: 1rem;
-    color: #2c3e50;
+    color: var(--text-primary);
+    transition: color 0.3s ease;
   }
 }
 
@@ -365,8 +505,9 @@ onMounted(() => {
 
   h2 {
     font-size: 1.5rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 }
 
@@ -377,14 +518,15 @@ onMounted(() => {
 }
 
 .file-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  border-left: 4px solid var(--border-color);
+  transition: all 0.3s ease;
 
   &.has-analysis {
-    border-left-color: #447bda;
+    border-left-color: var(--primary-color);
   }
 
   .file-header {
@@ -395,16 +537,18 @@ onMounted(() => {
 
     h3 {
       font-size: 1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       font-family: monospace;
+      transition: color 0.3s ease;
     }
 
     .file-language {
       padding: 0.25rem 0.75rem;
-      background: #f8f9fa;
+      background: var(--light-gray);
       border-radius: 12px;
       font-size: 0.85rem;
-      color: #7f8c8d;
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
     }
   }
 
@@ -417,11 +561,11 @@ onMounted(() => {
       font-weight: 500;
 
       &.added {
-        color: #27ae60;
+        color: var(--success-color);
       }
 
       &.removed {
-        color: #e74c3c;
+        color: var(--danger-color);
       }
     }
   }
@@ -431,16 +575,18 @@ onMounted(() => {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 0.5rem;
     padding-top: 1rem;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-color);
 
     .rating-item {
       display: flex;
       justify-content: space-between;
       font-size: 0.9rem;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
 
       .rating-value {
         font-weight: bold;
-        color: #447bda;
+        color: var(--primary-color);
       }
     }
   }
@@ -453,22 +599,23 @@ onMounted(() => {
 }
 
 .suggestion-card {
-  background: white;
+  background: var(--card-background);
   padding: 1.5rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #e0e0e0;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  border-left: 4px solid var(--border-color);
+  transition: all 0.3s ease;
 
   &.priority-high {
-    border-left-color: #e74c3c;
+    border-left-color: var(--danger-color);
   }
 
   &.priority-medium {
-    border-left-color: #f39c12;
+    border-left-color: var(--warning-color);
   }
 
   &.priority-low {
-    border-left-color: #3498db;
+    border-left-color: var(--info-color);
   }
 
   .suggestion-header {
@@ -479,8 +626,9 @@ onMounted(() => {
 
     h3 {
       font-size: 1.1rem;
-      color: #2c3e50;
+      color: var(--text-primary);
       flex: 1;
+      transition: color 0.3s ease;
     }
 
     .suggestion-badges {
@@ -514,9 +662,10 @@ onMounted(() => {
   }
 
   .suggestion-description {
-    color: #7f8c8d;
+    color: var(--text-secondary);
     line-height: 1.6;
     margin-bottom: 1rem;
+    transition: color 0.3s ease;
   }
 
   .suggestion-footer {
@@ -524,21 +673,24 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding-top: 1rem;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--border-color);
     font-size: 0.85rem;
 
     .file-ref {
-      color: #7f8c8d;
+      color: var(--text-secondary);
       font-family: monospace;
+      transition: color 0.3s ease;
     }
 
     .resources {
       display: flex;
       gap: 0.5rem;
       align-items: center;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
 
       .resource-link {
-        color: #447bda;
+        color: var(--primary-color);
         text-decoration: none;
 
         &:hover {

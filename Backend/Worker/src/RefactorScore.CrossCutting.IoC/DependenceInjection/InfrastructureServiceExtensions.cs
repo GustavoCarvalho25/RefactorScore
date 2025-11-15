@@ -31,6 +31,8 @@ public static class InfrastructureServiceExtensions
         });
         
         services.AddSingleton<ICommitAnalysisRepository, CommitAnalysisRepository>();
+        
+        services.AddSingleton<MongoDbIndexInitializer>();
 
         services.AddSingleton<IGitServiceFacade>(sp =>
         {

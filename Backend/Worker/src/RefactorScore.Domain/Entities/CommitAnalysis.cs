@@ -8,6 +8,7 @@ namespace RefactorScore.Domain.Entities;
 public class CommitAnalysis : Entity, IAggregateRoot
 {
     public string CommitId { get; private set; }
+    public string Project { get; private set; }
     public string Author { get; private set; }
     public string Email { get; private set; }
     public DateTime CommitDate { get; private set; }
@@ -52,12 +53,13 @@ public class CommitAnalysis : Entity, IAggregateRoot
         RemovedLines = _files.Sum(f => f.RemovedLines);
     }
     
-    public CommitAnalysis(string commitId, string author, string email, DateTime commitDate, DateTime analysisDate, string language, int addedLines, int removedLines)
+    public CommitAnalysis(string commitId, string author, string email, DateTime commitDate, DateTime analysisDate, string language, int addedLines, int removedLines, string project)
     {
         Guard.Against.NullOrWhiteSpace(commitId, nameof(commitId));
         Guard.Against.NullOrWhiteSpace(author, nameof(author));
         Guard.Against.NullOrWhiteSpace(email, nameof(email));
         Guard.Against.NullOrWhiteSpace(language, nameof(language));
+        Guard.Against.NullOrWhiteSpace(project, nameof(project));
         Guard.Against.Negative(addedLines, nameof(addedLines));
         Guard.Against.Negative(removedLines, nameof(removedLines));
         
@@ -65,10 +67,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
             throw new ArgumentException("CommitDate cannot be in the future", nameof(commitDate));
         
         if (analysisDate < commitDate)
-            throw new ArgumentException("AnalysisDate cannot be before CommitDate", nameof(analysisDate));
-        
-        if (!IsValidEmail(email))
-            throw new ArgumentException("Email format is invalid", nameof(email));
+            throw new ArgumentException("AnalysisDate cannot be before CommitDate", nameof(analysisDate));        
         
         CommitId = commitId;
         Author = author;
@@ -78,6 +77,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
         Language = language;
         AddedLines = addedLines;
         RemovedLines = removedLines;
+        Project = project;
     }
     
     private static bool IsValidEmail(string email)
