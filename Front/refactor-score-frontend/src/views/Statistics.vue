@@ -62,6 +62,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useFetch, Service } from '../composables/useFetch';
+import { useProjectStore } from '../stores/projectStore';
 import type { CommitAnalysis } from '../interfaces/CommitAnalysis';
 import type { CleanCodeRating } from '../interfaces/CleanCodeRating';
 import { translateQuality } from '../utils/translations';
@@ -71,6 +72,7 @@ import RadarChart from '../components/charts/RadarChart.vue';
 import DoughnutChart from '../components/charts/DoughnutChart.vue';
 
 const { fetchData, loading, error: apiError, result } = useFetch(Service.Statistics);
+const projectStore = useProjectStore();
 
 interface Metrics {
   variableNaming: number;
@@ -141,13 +143,6 @@ const qualityDistribution = computed(() => {
   const percentages = counts.map(count => 
     totalCommits > 0 ? (count / totalCommits) * 100 : 0
   );
-
-  // Log para debug
-  console.log('Estatísticas:', {
-    totalCommits,
-    contagens: Object.fromEntries(qualities.map((q, i) => [q, counts[i]])),
-    porcentagens: Object.fromEntries(qualities.map((q, i) => [q, (percentages[i] ?? 0).toFixed(1) + '%']))
-  });
 
   return {
     labels: qualities.map(q => translateQuality(q)),
@@ -264,7 +259,12 @@ const loadStatistics = async () => {
   error.value = null;
 
   try {
-    await fetchData('get', '/');
+    const params = new URLSearchParams();
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    const queryString = params.toString();
+    await fetchData('get', queryString ? `/?${queryString}` : '/');
     
     if (apiError.value) {
       error.value = 'Erro ao carregar estatísticas';
@@ -273,14 +273,6 @@ const loadStatistics = async () => {
       commitsEvolution.value = result.value.commits || [];
       bestNote.value = result.value.bestNote || 0;
       worstNote.value = result.value.worstNote || 0;
-      
-      console.log('Dados carregados:', {
-        commits: commitsEvolution.value.length,
-        autores: [...new Set(commitsEvolution.value.map(c => c.author))],
-        amostraCommit: commitsEvolution.value[0], // Mostra o primeiro commit como exemplo
-        qualidades: [...new Set(commitsEvolution.value.map(c => c.quality))], // Lista todas as qualidades únicas
-        dadosCompletos: result.value // Mostra todos os dados recebidos
-      });
     }
   } catch (err) {
     error.value = 'Erro ao carregar estatísticas';

@@ -185,6 +185,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAnalysisStore } from '../stores/analysisStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useAnalysisService } from '../server/api/analysisService';
 import { CommitAnalysis } from '../interfaces/CommitAnalysis';
 import { Suggestion } from '../interfaces/Suggestion';
@@ -195,6 +196,7 @@ import { translateQuality, translateMetric } from '../utils/translations';
 const router = useRouter();
 const route = useRoute();
 const analysisStore = useAnalysisStore();
+const projectStore = useProjectStore();
 const analysisService = useAnalysisService();
 
 const analyses = ref<CommitAnalysis[]>([]);
@@ -363,9 +365,13 @@ const fetchAnalyses = async () => {
     loading.value = true;
     error.value = null;
     
-    console.log('Fazendo requisição para a API...');
-    const apiUrl = '/api/v1/analysis';
-    console.log('URL da API:', apiUrl);
+    // Adicionar filtro de projeto
+    const params = new URLSearchParams();
+    if (projectStore.selectedProject) {
+      params.append('project', projectStore.selectedProject);
+    }
+    const queryString = params.toString();
+    const apiUrl = `/api/v1/analysis${queryString ? `?${queryString}` : ''}`;
 
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -376,51 +382,26 @@ const fetchAnalyses = async () => {
       credentials: 'same-origin'
     });
     
-    console.log('Status da resposta:', response.status);
-    console.log('Headers:', Object.fromEntries(response.headers.entries()));
-    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Erro da API:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-        url: response.url
-      });
       throw new Error(`Erro na resposta da API: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
-    console.log('Dados recebidos:', {
-      data,
-      type: typeof data,
-      isArray: Array.isArray(data),
-      hasData: data?.data !== undefined,
-      keys: Object.keys(data || {})
-    });
-    
     return data;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
     error.value = `Erro ao carregar análises: ${errorMessage}`;
-    console.error('Error loading analyses:', {
-      error: err,
-      message: errorMessage,
-      stack: err instanceof Error ? err.stack : undefined,
-      type: err?.constructor?.name
-    });
+    console.error('Error loading analyses:', err);
     return null;
   }
 };
 
 const loadAnalyses = async () => {
-  console.log('Iniciando carregamento...');
   try {
     const data = await fetchAnalyses();
-    console.log('Resposta completa:', data);
 
     if (!data) {
-      console.warn('Nenhum dado recebido da API');
       analyses.value = [];
       return;
     }
@@ -429,29 +410,20 @@ const loadAnalyses = async () => {
     let analysesData;
     
     if (data.success && Array.isArray(data.analysis)) {
-      console.log('Dados recebidos no formato correto');
       analysesData = data.analysis;
     } else if (Array.isArray(data)) {
-      console.log('Dados recebidos como array');
       analysesData = data;
     } else if (data.data && Array.isArray(data.data)) {
-      console.log('Dados recebidos dentro de data.data como array');
       analysesData = data.data;
     } else if (typeof data === 'object') {
       if (data.id || data.commitId) {
-        console.log('Dados recebidos como objeto único de análise');
         analysesData = [data];
       } else if (data.data && typeof data.data === 'object') {
-        console.log('Dados recebidos como objeto único dentro de data');
         analysesData = [data.data];
       }
     }
 
-    // Log para debug dos dados recebidos
-    console.log('Dados brutos recebidos:', JSON.stringify(analysesData, null, 2));
-
     if (!analysesData) {
-      console.error('Formato de dados não reconhecido:', data);
       analyses.value = [];
       error.value = 'Formato de dados inválido recebido da API';
       return;
@@ -460,7 +432,6 @@ const loadAnalyses = async () => {
     // Filtra e valida cada item
     analyses.value = analysesData.filter((item: any) => {
       if (!item || typeof item !== 'object') {
-        console.warn('Item inválido encontrado:', item);
         return false;
       }
       return true;
@@ -487,14 +458,8 @@ const loadAnalyses = async () => {
       };
     });
 
-    console.log('Análises processadas:', {
-      total: analyses.value.length,
-      items: analyses.value
-    });
-
     analysisStore.setAnalyses(analyses.value);
   } catch (err) {
-    console.error('Erro ao processar dados:', err);
     analyses.value = [];
     error.value = 'Erro ao processar dados da análise';
   } finally {
@@ -520,15 +485,11 @@ const searchByCommitId = async () => {
     const { result, error: apiError } = await analysisService.getAnalysisById(commitId);
     
     if (apiError.value) {
-      console.error('Erro ao buscar por CommitId:', apiError.value);
-      // Se falhar, tenta buscar na lista geral
       loadAnalyses();
     } else if (result.value?.success && result.value.data) {
-      // Sucesso: encontrou a análise específica (já no formato correto)
       const data = result.value.data;
       
       analyses.value = [data];
-      console.log('Análise encontrada:', data);
       
       // Expande automaticamente o commit encontrado
       const foundCommitId = data.commitId || data.id;
@@ -540,8 +501,6 @@ const searchByCommitId = async () => {
       loadAnalyses();
     }
   } catch (err) {
-    console.error('Erro na busca:', err);
-    // Em caso de erro, tenta buscar na lista geral
     loadAnalyses();
   } finally {
     loading.value = false;
@@ -553,11 +512,8 @@ onMounted(() => {
   const commitId = route.query.commitId as string;
   if (commitId) {
     searchQuery.value = commitId;
-    console.log('Buscando commit:', commitId);
-    // Executa busca específica pelo CommitId
     searchByCommitId();
   } else {
-    // Carrega lista geral
     loadAnalyses();
   }
 });

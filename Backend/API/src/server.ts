@@ -176,8 +176,18 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
 
       // Conta sugestões totais (campo Suggestions no nível do documento)
       const suggestionsPipeline: any[] = [];
+      
+      // Aplicar filtro de projeto e commitIds
+      const suggestionsMatchStage: any = {};
+      if (projectFilter) {
+        suggestionsMatchStage.Project = projectFilter;
+      }
       if (commitIds.length > 0) {
-        suggestionsPipeline.push({ $match: { _id: { $in: commitIds } } });
+        suggestionsMatchStage._id = { $in: commitIds };
+      }
+      
+      if (Object.keys(suggestionsMatchStage).length > 0) {
+        suggestionsPipeline.push({ $match: suggestionsMatchStage });
       }
       suggestionsPipeline.push(
         {
@@ -201,8 +211,18 @@ app.get('/api/v1/main', (req: Request, res: Response) => {
 
       // Buscar commits individuais com suas notas para gráfico de evolução
       const commitsPipeline: any[] = [];
+      
+      // Aplicar filtro de projeto e commitIds
+      const commitsMatchStage: any = {};
+      if (projectFilter) {
+        commitsMatchStage.Project = projectFilter;
+      }
       if (commitIds.length > 0) {
-        commitsPipeline.push({ $match: { _id: { $in: commitIds } } });
+        commitsMatchStage._id = { $in: commitIds };
+      }
+      
+      if (Object.keys(commitsMatchStage).length > 0) {
+        commitsPipeline.push({ $match: commitsMatchStage });
       }
       commitsPipeline.push(
         {
@@ -287,8 +307,16 @@ app.get('/api/v1/statistics', (req: Request, res: Response) => {
       const db = client.db('RefactorScore');
       const collection = db.collection('CommitAnalysis');
 
+      // Filtro por projeto (query param ?project=)
+      const projectFilter = (req.query.project as string) || '';
+      const matchStage: any = {};
+      if (projectFilter) {
+        matchStage.Project = projectFilter;
+      }
+
       // Buscar commits individuais com suas notas, metadados e métricas
       const commitsPipeline = [
+        ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
         {
           $project: {
             _id: 1,

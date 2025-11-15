@@ -152,14 +152,6 @@ const lineChartData = computed(() => {
       const startDate = filterStartDate.value ? formatDate(filterStartDate.value) : '';
       const endDate = filterEndDate.value ? formatDate(filterEndDate.value) : '';
 
-      // Debug das datas do filtro
-      console.log('Datas do filtro:', {
-        startDateOriginal: filterStartDate.value,
-        endDateOriginal: filterEndDate.value,
-        startDateFormatted: startDate,
-        endDateFormatted: endDate
-      });
-
       commits = commits.filter(commit => {
         // Converter a data do commit para YYYY-MM-DD
         const commitDate = formatDate(commit.commitDate);
@@ -169,17 +161,6 @@ const lineChartData = computed(() => {
         const isAfterStart = !startDate || commitDate >= startDate;
         const isBeforeEnd = !endDate || commitDate <= endDate;
         const isInRange = isAfterStart && isBeforeEnd;
-        
-        // Log detalhado para cada commit
-        console.log(`Avaliando commit:`, {
-          commitOriginal: commit.commitDate,
-          commitFormatado: commitDate,
-          dataInicio: startDate || 'sem limite',
-          dataFim: endDate || 'sem limite',
-          isAfterStart,
-          isBeforeEnd,
-          incluido: isInRange
-        });
         
         return isInRange;
       });
@@ -191,19 +172,7 @@ const lineChartData = computed(() => {
         return dateA - dateB;
       });
 
-      // Log do resultado final
-      console.log('Resultado da filtragem:', {
-        totalCommits: commitsEvolution.value.length,
-        commitsFiltrados: commits.length,
-        intervalo: {
-          inicio: startDate || 'sem limite',
-          fim: endDate || 'sem limite'
-        },
-        primeiroCommit: commits.length > 0 && commits[0]?.commitDate ? 
-          formatDate(commits[0].commitDate) : 'nenhum',
-        ultimoCommit: commits.length > 0 && commits[commits.length - 1]?.commitDate ? 
-          formatDate(commits[commits.length - 1]?.commitDate || '') : 'nenhum'
-      });
+
     }
 
     // 3. Ordenar por data
@@ -216,19 +185,6 @@ const lineChartData = computed(() => {
     const dates = commits.map(commit => formatDate(commit.commitDate));
     const notes = commits.map(commit => commit.note);
 
-    // Log para debug
-    console.log('Dados processados:', {
-      totalCommits: commitsEvolution.value.length,
-      filteredCommits: commits.length,
-      dateRange: {
-        start: filterStartDate.value,
-        end: filterEndDate.value
-      },
-      datas: dates,
-      notas: notes
-    });
-
-    // 5. Retornar dados formatados para o gráfico
     return {
       labels: dates,
       datasets: [
@@ -308,7 +264,6 @@ const goToAnalysis = (id: string) => {
 const handlePointClick = (datasetIndex: number, pointIndex: number) => {
   const commit = filteredCommits.value[pointIndex];
   if (commit && commit.id) {
-    console.log('Navegando para análise do commit:', commit.id);
     router.push({ name: 'Analysis', query: { commitId: commit.id } });
   }
 };
@@ -343,17 +298,12 @@ const loadStatistics = async () => {
     }
 
     if (result.value) {
-      console.log('Dados recebidos:', result.value);
       commitCount.value = result.value.total || 0;
       averageNote.value = Number(result.value.averageNote?.toFixed(2)) || 0;
       uniqueFilesCount.value = result.value.uniqueFilesCount || 0;
       totalSuggestions.value = result.value.totalSuggestions || 0;
       languageFrequency.value = result.value.languageFrequency || [];
       commitsEvolution.value = result.value.commitsEvolution || [];
-
-      console.log('Dados de evolução atualizados:', commitsEvolution.value);
-    } else {
-      console.error('Dados não encontrados na resposta da API');
     }
   } catch (err) {
     console.error('Erro ao carregar estatísticas:', err);
@@ -362,14 +312,7 @@ const loadStatistics = async () => {
 
 // Observar mudanças nas datas do filtro
 watch([filterStartDate, filterEndDate], () => {
-  // Incrementar a chave para forçar a recriação do gráfico
   chartKey.value++;
-  
-  console.log('Filtros atualizados, recriando gráfico...', {
-    startDate: filterStartDate.value,
-    endDate: filterEndDate.value,
-    newChartKey: chartKey.value
-  });
 });
 
 onMounted(() => {
