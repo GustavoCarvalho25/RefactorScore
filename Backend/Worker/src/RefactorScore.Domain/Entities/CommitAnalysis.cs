@@ -67,10 +67,7 @@ public class CommitAnalysis : Entity, IAggregateRoot
             throw new ArgumentException("CommitDate cannot be in the future", nameof(commitDate));
         
         if (analysisDate < commitDate)
-            throw new ArgumentException("AnalysisDate cannot be before CommitDate", nameof(analysisDate));
-        
-        if (!IsValidEmail(email))
-            throw new ArgumentException("Email format is invalid", nameof(email));
+            throw new ArgumentException("AnalysisDate cannot be before CommitDate", nameof(analysisDate));        
         
         CommitId = commitId;
         Author = author;
