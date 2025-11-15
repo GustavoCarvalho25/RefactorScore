@@ -1,14 +1,15 @@
-import express, { Request, Response } from 'express'
+import express from 'express' // Importa o valor runtime do Express (a função app)
+import type { Request, Response } from 'express' // Importa APENAS os tipos para TypeScript
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { MongoClient } from 'mongodb'
+import { MongoClient, ObjectId } from 'mongodb'
 
 dotenv.config()
 
 const app = express()
 
 app.use(cors({
-  origin: 'http://localhost:5173', 
+  origin: 'http://RefactorScorehost:5173',
   credentials: true
 }))
 
@@ -21,7 +22,7 @@ app.get('/health', (req: Request, res: Response) => {
 })
 
 // Rota principal de estatísticas: total de análises e nota média
-app.get('/api/v1/analysis', (req: Request, res: Response) => {
+app.get('/api/v1/main', (req: Request, res: Response) => {
   const uri = process.env.MONGODB_URI;
   if (!uri || typeof uri !== 'string' || uri.trim() === '') {
     return res.status(500).json({
@@ -34,17 +35,42 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
 
+      const projectFilter = (req.query.project as string) || '';
+      
       // optional: filter to specific commit ids passed as comma-separated query param
       const commitIdsParam = (req.query.commitIds as string) || '';
       const commitIds = commitIdsParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
-      // Conta total de documentos (aplica filtro se commitIds foram informados)
-      const total = commitIds.length > 0
-        ? await collection.countDocuments({ _id: { $in: commitIds as any } })
-        : await collection.countDocuments();
+      // Construir filtro base
+      const baseFilter: any = {};
+      if (projectFilter) {
+        baseFilter.Project = projectFilter;
+      }
+      if (commitIds.length > 0) {
+        baseFilter._id = { $in: commitIds as any };
+      }
+
+      // Conta total de documentos (aplica filtros)
+      const total = await collection.countDocuments(baseFilter);
+
+      // Conta total de arquivos analisados em todos os commits
+      const filesCountPipeline: any[] = [];
+      if (Object.keys(baseFilter).length > 0) {
+        filesCountPipeline.push({ $match: baseFilter });
+      }
+      filesCountPipeline.push(
+        { $project: { files: { $ifNull: ['$Files', '$files'] } } },
+        { $unwind: { path: '$files', preserveNullAndEmptyArrays: false } },
+        { $group: { _id: null, count: { $sum: 1 } } }
+      );
+      
+      const filesCountAgg = await collection.aggregate(filesCountPipeline).toArray();
+      const totalFilesAnalyzed = (filesCountAgg && filesCountAgg[0] && typeof filesCountAgg[0].count === 'number')
+        ? filesCountAgg[0].count
+        : 0;
 
       // Calculando a média das notas dos commits
       // Cada commit tem um campo Rating.Note que representa a nota da avaliação
@@ -52,7 +78,7 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
         // Projetar o campo da nota, tolerando diferentes nomenclaturas
         {
           $project: {
-            commitNote: { 
+            commitNote: {
               $ifNull: [
                 '$Rating.Note',
                 { $ifNull: [
@@ -88,8 +114,8 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
         }
       ];
 
-      const pipeline = commitIds.length > 0 
-        ? [{ $match: { _id: { $in: commitIds as any } } }, ...basePipeline] 
+      const pipeline = Object.keys(baseFilter).length > 0
+        ? [{ $match: baseFilter }, ...basePipeline]
         : basePipeline;
 
       const agg = await collection.aggregate(pipeline).toArray();
@@ -97,8 +123,8 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
 
       // Conta arquivos únicos por id dentro de Files/files
       const uniqueFilesPipeline: any[] = [];
-      if (commitIds.length > 0) {
-        uniqueFilesPipeline.push({ $match: { _id: { $in: commitIds } } });
+      if (Object.keys(baseFilter).length > 0) {
+        uniqueFilesPipeline.push({ $match: baseFilter });
       }
       uniqueFilesPipeline.push(
         { $project: { filesArr: { $ifNull: ['$Files', '$files'] } } },
@@ -114,26 +140,26 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
 
       // Conta frequência de linguagens dentro de Files/files de todos os documentos
       const languageFrequencyPipeline: any[] = [];
-      if (commitIds.length > 0) {
-        languageFrequencyPipeline.push({ $match: { _id: { $in: commitIds } } });
+      if (Object.keys(baseFilter).length > 0) {
+        languageFrequencyPipeline.push({ $match: baseFilter });
       }
       languageFrequencyPipeline.push(
         { $project: { filesArr: { $ifNull: ['$Files', '$files'] } } },
         { $unwind: { path: '$filesArr', preserveNullAndEmptyArrays: false } },
-        { 
-          $project: { 
-            language: { 
+        {
+          $project: {
+            language: {
               $ifNull: [
-                '$filesArr.Language', 
+                '$filesArr.Language',
                 { $ifNull: ['$filesArr.language', 'Unknown'] }
-              ] 
-            } 
-          } 
+              ]
+            }
+          }
         },
         { $match: { language: { $ne: null } } },
         { $group: { _id: '$language', count: { $sum: 1 } } },
         { $sort: { count: -1 } },
-        { 
+        {
           $project: {
             _id: 0,
             language: '$_id',
@@ -150,33 +176,53 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
 
       // Conta sugestões totais (campo Suggestions no nível do documento)
       const suggestionsPipeline: any[] = [];
+      
+      // Aplicar filtro de projeto e commitIds
+      const suggestionsMatchStage: any = {};
+      if (projectFilter) {
+        suggestionsMatchStage.Project = projectFilter;
+      }
       if (commitIds.length > 0) {
-        suggestionsPipeline.push({ $match: { _id: { $in: commitIds } } });
+        suggestionsMatchStage._id = { $in: commitIds };
+      }
+      
+      if (Object.keys(suggestionsMatchStage).length > 0) {
+        suggestionsPipeline.push({ $match: suggestionsMatchStage });
       }
       suggestionsPipeline.push(
-        { 
-          $project: { 
-            suggestions: { 
+        {
+          $project: {
+            suggestions: {
               $ifNull: [
-                '$Suggestions', 
+                '$Suggestions',
                 { $ifNull: ['$suggestions', []] }
-              ] 
-            } 
-          } 
+              ]
+            }
+          }
         },
         { $unwind: { path: '$suggestions', preserveNullAndEmptyArrays: false } },
         { $group: { _id: null, count: { $sum: 1 } } }
       );
 
       const suggestionsAgg = await collection.aggregate(suggestionsPipeline).toArray();
-      const totalSuggestions = (suggestionsAgg && suggestionsAgg[0] && typeof suggestionsAgg[0].count === 'number') 
-        ? suggestionsAgg[0].count 
+      const totalSuggestions = (suggestionsAgg && suggestionsAgg[0] && typeof suggestionsAgg[0].count === 'number')
+        ? suggestionsAgg[0].count
         : 0;
 
       // Buscar commits individuais com suas notas para gráfico de evolução
       const commitsPipeline: any[] = [];
+      
+      // Aplicar filtro de projeto e commitIds
+      const commitsMatchStage: any = {};
+      if (projectFilter) {
+        commitsMatchStage.Project = projectFilter;
+      }
       if (commitIds.length > 0) {
-        commitsPipeline.push({ $match: { _id: { $in: commitIds } } });
+        commitsMatchStage._id = { $in: commitIds };
+      }
+      
+      if (Object.keys(commitsMatchStage).length > 0) {
+        commitsPipeline.push({ $match: commitsMatchStage });
       }
       commitsPipeline.push(
         {
@@ -189,12 +235,12 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
             language: { $ifNull: ['$Language', '$language'] },
             note: {
               $ifNull: [
-                '$OverallNote', 
-                      { $ifNull: [
-                            '$overallNote', 
-                                   0 
-    ]}
-]
+                '$OverallNote',
+                { $ifNull: [
+                  '$overallNote',
+                  0
+                ]}
+              ]
             },
             quality: {
               $ifNull: [
@@ -219,29 +265,19 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
         };
 
         return {
-          id: commit._id,
-          commitId: commit.commitId || null,
-          author: commit.author || 'Unknown',
+          id: commit.CommitId || commit.commitId,
           commitDate: extractDate(commit.commitDate),
           analysisDate: extractDate(commit.analysisDate),
-          language: commit.language || 'Unknown',
-          note: commit.note || 0,
-          quality: commit.quality || 'Unknown'
+          note: commit.note || 0
         };
       });
 
-      // Calcular melhor e pior nota
-      const notasValidas = commitsEvolution.map(c => c.note).filter(n => n > 0);
-      const bestNote = notasValidas.length > 0 ? Math.max(...notasValidas) : 0;
-      const worstNote = notasValidas.length > 0 ? Math.min(...notasValidas) : 0;
-
-      res.json({ 
-        success: true, 
-        total, 
+      res.json({
+        success: true,
+        total,
+        totalFilesAnalyzed,
         averageNote,
-        bestNote,
-        worstNote,
-        uniqueFilesCount, 
+        uniqueFilesCount,
         languageFrequency,
         totalSuggestions,
         commitsEvolution
@@ -255,6 +291,111 @@ app.get('/api/v1/analysis', (req: Request, res: Response) => {
   })();
 })
 
+app.get('/api/v1/statistics', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({
+      success: false,
+      error: 'Variável de ambiente MONGODB_URI não definida ou inválida.'
+    });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+
+      // Filtro por projeto (query param ?project=)
+      const projectFilter = (req.query.project as string) || '';
+      const matchStage: any = {};
+      if (projectFilter) {
+        matchStage.Project = projectFilter;
+      }
+
+      // Buscar commits individuais com suas notas, metadados e métricas
+      const commitsPipeline = [
+        ...(Object.keys(matchStage).length > 0 ? [{ $match: matchStage }] : []),
+        {
+          $project: {
+            _id: 1,
+            author: { $ifNull: ['$Author', '$author'] },
+            language: { $ifNull: ['$Language', '$language'] },
+            note: {
+              $ifNull: [
+                '$OverallNote',
+                { $ifNull: [
+                  '$overallNote',
+                  0
+                ]}
+              ]
+            },
+            quality: {
+              $ifNull: [
+                '$Rating.Quality',
+                { $ifNull: ['$rating.quality', 'Unknown'] }
+              ]
+            },
+            files: { $ifNull: ['$Files', '$files'] }
+          }
+        }
+      ];
+
+      const commitsAgg = await collection.aggregate(commitsPipeline).toArray();
+      const commitsStats = commitsAgg.map((commit: any) => {
+        const filesArr = commit.files || [];
+        const metrics = filesArr.reduce((acc: any, file: any) => {
+          const rating = file.Rating || file.rating || {};
+          acc.variableNaming += Number(rating.VariableNaming || rating.variableNaming || 0);
+          acc.functionSizes += Number(rating.FunctionSizes || rating.functionSizes || 0);
+          acc.noNeedsComments += Number(rating.NoNeedsComments || rating.noNeedsComments || 0);
+          acc.methodCohesion += Number(rating.MethodCohesion || rating.methodCohesion || 0);
+          acc.deadCode += Number(rating.DeadCode || rating.deadCode || 0);
+          return acc;
+        }, {
+          variableNaming: 0,
+          functionSizes: 0,
+          noNeedsComments: 0,
+          methodCohesion: 0,
+          deadCode: 0
+        });
+
+        // Calcular média das métricas pelo número de arquivos
+        const numFiles = filesArr.length || 1;
+        Object.keys(metrics).forEach(key => {
+          metrics[key] = Number((metrics[key] / numFiles).toFixed(2));
+        });
+
+        return {
+          id: commit._id,
+          author: commit.author || 'Unknown',
+          language: commit.language || 'Unknown',
+          note: commit.note || 0,
+          quality: commit.quality || 'Unknown',
+          metrics: metrics
+        };
+      });
+
+      // Calcular melhor e pior nota
+      const notasValidas = commitsStats.map(c => c.note).filter(n => n > 0);
+      const bestNote = notasValidas.length > 0 ? Math.max(...notasValidas) : 0;
+      const worstNote = notasValidas.length > 0 ? Math.min(...notasValidas) : 0;
+
+      res.json({
+        success: true,
+        bestNote,
+        worstNote,
+        commits: commitsStats
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: 'Erro interno do servidor', message: error.message });
+    } finally {
+      await client.close();
+    }
+  })();
+});
+
 // Rota de debug para inspecionar documentos e notas calculadas
 app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
   const uri = process.env.MONGODB_URI;
@@ -266,8 +407,8 @@ app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
   (async () => {
     try {
       await client.connect();
-      const db = client.db('local');
-      const collection = db.collection('RefactorScore');
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
 
       const limit = parseInt((req.query.limit as string) || '5', 10);
       const docs = await collection.find({}).limit(limit).toArray();
@@ -292,9 +433,9 @@ app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
         });
 
         const totalFiles = filesDetails.length;
-  const commitAverage = totalFiles > 0 ? (filesDetails.reduce((s, x) => s + (Number(x.perFileSum) || 0), 0) / totalFiles) : 0;
-  // escala 0-50 -> 0-100 e arredonda
-  const commitScore = Math.round((commitAverage / 50) * 100);
+        const commitAverage = totalFiles > 0 ? (filesDetails.reduce((s, x) => s + (Number(x.perFileSum) || 0), 0) / totalFiles) : 0;
+        // escala 0-50 -> 0-100 e arredonda
+        const commitScore = Math.round((commitAverage / 50) * 100);
 
         const overallNote = d.overallNote ?? null;
         const pontuacaoRefatoracao = d.pontuacaoRefatoracao ?? null;
@@ -324,8 +465,307 @@ app.get('/api/v1/analysis/debug', (req: Request, res: Response) => {
   })();
 })
 
+// Endpoint para listar todos os projetos com suas métricas
+app.get('/api/v1/projects', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' 
+    });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+
+      // Buscar todos os projetos únicos
+      const projectNames = await collection.distinct('Project');
+
+      // Para cada projeto, agregar suas métricas
+      const projectsWithMetrics = await Promise.all(
+        projectNames.map(async (projectName: string) => {
+          // Pipeline de agregação para calcular métricas do projeto
+          const metricsPipeline = [
+            { $match: { Project: projectName } },
+            {
+              $group: {
+                _id: '$Project',
+                totalCommits: { $sum: 1 },
+                lastAnalysisDate: { $max: '$AnalysisDate' },
+                totalFiles: { $sum: { $size: { $ifNull: ['$Files', []] } } },
+                // Calcular média das notas
+                avgNote: {
+                  $avg: {
+                    $ifNull: [
+                      '$Rating.Note',
+                      { $ifNull: ['$OverallNote', 0] }
+                    ]
+                  }
+                }
+              }
+            }
+          ];
+
+          const metricsResult = await collection.aggregate(metricsPipeline).toArray();
+          const metrics = metricsResult[0] || {};
+
+          // Buscar linguagem mais comum no projeto
+          const languagePipeline = [
+            { $match: { Project: projectName } },
+            { $group: { _id: '$Language', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 1 }
+          ];
+
+          const languageResult = await collection.aggregate(languagePipeline).toArray();
+          const mainLanguage = languageResult[0]?._id || 'Unknown';
+
+          return {
+            name: projectName,
+            totalCommits: metrics.totalCommits || 0,
+            averageNote: Math.round((metrics.avgNote || 0) * 100) / 100,
+            lastAnalysisDate: metrics.lastAnalysisDate || null,
+            mainLanguage: mainLanguage,
+            totalFiles: metrics.totalFiles || 0
+          };
+        })
+      );
+
+      // Ordenar por data de última análise (mais recente primeiro)
+      projectsWithMetrics.sort((a, b) => {
+        if (!a.lastAnalysisDate) return 1;
+        if (!b.lastAnalysisDate) return -1;
+        return new Date(b.lastAnalysisDate).getTime() - new Date(a.lastAnalysisDate).getTime();
+      });
+
+      res.json({ 
+        success: true, 
+        projects: projectsWithMetrics 
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao buscar projetos', 
+        message: error.message 
+      });
+    } finally {
+      await client.close();
+    }
+  })();
+});
+
+// Endpoint para buscar análise por ID
+app.get('/api/v1/analysis/:id', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+      
+      const { id } = req.params;
+      
+      // Buscar por CommitId (hash do commit do Git)
+      const doc = await collection.findOne({ CommitId: id });
+      
+      if (!doc) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Análise não encontrada' 
+        });
+      }
+      
+      // Processar o documento EXATAMENTE como o endpoint de lista
+      const filesArr: any[] = doc.Files ?? doc.files ?? [];
+      const filesDetails = (filesArr || []).map((f: any) => {
+        const rating = f.Rating ?? f.rating ?? {};
+        const fv1 = rating.VariableNaming ?? rating.variableNaming ?? 0;
+        const fv2 = rating.FunctionSizes ?? rating.functionSizes ?? 0;
+        const fv3 = rating.NoNeedsComments ?? rating.noNeedsComments ?? 0;
+        const fv4 = rating.MethodCohesion ?? rating.methodCohesion ?? 0;
+        const fv5 = rating.DeadCode ?? rating.deadCode ?? 0;
+        const perFileSum = (Number(fv1) || 0) + (Number(fv2) || 0) + (Number(fv3) || 0) + (Number(fv4) || 0) + (Number(fv5) || 0);
+
+        const justifications = rating.Justifications ?? rating.justifications ?? {};
+        const suggestions = (f.Suggestions ?? f.suggestions ?? []).map((s: any) => ({
+          title: s.Title ?? s.title,
+          description: s.Description ?? s.description,
+          priority: s.Priority ?? s.priority,
+          type: s.Type ?? s.type,
+          difficult: s.Difficult ?? s.difficult,
+          fileReference: s.FileReference ?? s.fileReference,
+          lastUpdate: s.LastUpdate ?? s.lastUpdate,
+          studyResources: s.StudyResources ?? s.studyResources ?? []
+        }));
+
+        return {
+          fileId: f._id ?? f.id ?? null,
+          path: f.Path ?? f.path,
+          language: f.Language ?? f.language,
+          addedLines: f.AddedLines ?? f.addedLines ?? 0,
+          removedLines: f.RemovedLines ?? f.removedLines ?? 0,
+          content: f.Content ?? f.content,
+          rating: {
+            variableNaming: fv1,
+            functionSizes: fv2,
+            noNeedsComments: fv3,
+            methodCohesion: fv4,
+            deadCode: fv5,
+            note: rating.Note ?? rating.note ?? 0,
+            quality: rating.Quality ?? rating.quality ?? 'Unknown',
+            justifications: {
+              variableNaming: justifications.VariableNaming ?? justifications.variableNaming,
+              functionSizes: justifications.FunctionSizes ?? justifications.functionSizes,
+              noNeedsComments: justifications.NoNeedsComments ?? justifications.noNeedsComments,
+              methodCohesion: justifications.MethodCohesion ?? justifications.methodCohesion,
+              deadCode: justifications.DeadCode ?? justifications.deadCode
+            }
+          },
+          suggestions,
+          perFileSum,
+        };
+      });
+
+      const totalFiles = filesDetails.length;
+      const commitNote = doc.Rating?.Note ?? doc.rating?.note ?? doc.OverallNote ?? doc.overallNote ?? doc.pontuacaoRefatoracao ?? 0;
+
+      const result = {
+        id: doc._id.toString(),
+        author: doc.Author ?? doc.author ?? 'Unknown',
+        commitId: doc.CommitId ?? doc.commitId,
+        analysisDate: doc.AnalysisDate ?? doc.analysisDate,
+        OverallNote: doc.OverallNote ?? doc.overallNote ?? 0,
+        filesDetails
+      };
+
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('Erro ao buscar análise:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao buscar análise', 
+        message: error.message 
+      });
+    } finally {
+      await client.close();
+    }
+  })();
+});
+
+app.get('/api/v1/analysis', (req: Request, res: Response) => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || typeof uri !== 'string' || uri.trim() === '') {
+    return res.status(500).json({ success: false, error: 'Variável de ambiente MONGODB_URI não definida ou inválida.' });
+  }
+
+  const client = new MongoClient(uri);
+  (async () => {
+    try {
+      await client.connect();
+      const db = client.db('RefactorScore');
+      const collection = db.collection('CommitAnalysis');
+      
+      // Filtro por projeto (query param ?project=)
+      const projectFilter = (req.query.project as string) || '';
+      const filter: any = {};
+      if (projectFilter) {
+        filter.Project = projectFilter;
+      }
+      
+      const limit = parseInt((req.query.limit as string) || '5', 10);
+      const docs = await collection.find(filter).limit(limit).toArray();
+      const result = docs.map((d: any) => {
+        const filesArr: any[] = d.Files ?? d.files ?? [];
+        const filesDetails = (filesArr || []).map((f: any) => {
+          // Extract rating fields with fallbacks
+          const rating = f.Rating ?? f.rating ?? {};
+          const fv1 = rating.VariableNaming ?? rating.variableNaming ?? 0;
+          const fv2 = rating.FunctionSizes ?? rating.functionSizes ?? 0;
+          const fv3 = rating.NoNeedsComments ?? rating.noNeedsComments ?? 0;
+          const fv4 = rating.MethodCohesion ?? rating.methodCohesion ?? 0;
+          const fv5 = rating.DeadCode ?? rating.deadCode ?? 0;
+          const perFileSum = (Number(fv1) || 0) + (Number(fv2) || 0) + (Number(fv3) || 0) + (Number(fv4) || 0) + (Number(fv5) || 0);
+
+          // Extract justifications with proper fallbacks
+          const justifications = rating.Justifications ?? rating.justifications ?? {};
+
+          // Extract suggestions with proper array handling
+          const suggestions = (f.Suggestions ?? f.suggestions ?? []).map((s: any) => ({
+            title: s.Title ?? s.title,
+            description: s.Description ?? s.description,
+            priority: s.Priority ?? s.priority,
+            type: s.Type ?? s.type,
+            difficult: s.Difficult ?? s.difficult,
+            fileReference: s.FileReference ?? s.fileReference,
+            lastUpdate: s.LastUpdate ?? s.lastUpdate,
+            studyResources: s.StudyResources ?? s.studyResources ?? []
+          }));
+
+          return {
+            fileId: f._id ?? f.id ?? null,
+            path: f.Path ?? f.path,
+            language: f.Language ?? f.language,
+            addedLines: f.AddedLines ?? f.addedLines ?? 0,
+            removedLines: f.RemovedLines ?? f.removedLines ?? 0,
+            content: f.Content ?? f.content,
+            rating: {
+              variableNaming: fv1,
+              functionSizes: fv2,
+              noNeedsComments: fv3,
+              methodCohesion: fv4,
+              deadCode: fv5,
+              note: rating.Note ?? rating.note ?? 0,
+              quality: rating.Quality ?? rating.quality ?? 'Unknown',
+              justifications: {
+                variableNaming: justifications.VariableNaming ?? justifications.variableNaming,
+                functionSizes: justifications.FunctionSizes ?? justifications.functionSizes,
+                noNeedsComments: justifications.NoNeedsComments ?? justifications.noNeedsComments,
+                methodCohesion: justifications.MethodCohesion ?? justifications.methodCohesion,
+                deadCode: justifications.DeadCode ?? justifications.deadCode
+              }
+            },
+            suggestions,
+            perFileSum,
+          };
+        });
+
+        const totalFiles = filesDetails.length;
+        const commitAverage = totalFiles > 0 ? (filesDetails.reduce((s, x) => s + (Number(x.perFileSum) || 0), 0) / totalFiles) : 0;
+
+        // Get commit note with fallbacks like in main route
+        const commitNote = d.Rating?.Note ?? d.rating?.note ?? d.OverallNote ?? d.overallNote ?? d.pontuacaoRefatoracao ?? 0;
+        
+        return {
+          id: d._id,
+          author: d.Author ?? d.author ?? 'Unknown',
+          commitId: d.CommitId ?? d.commitId,
+          analysisDate: d.AnalysisDate ?? d.analysisDate,
+          OverallNote: d.OverallNote ?? d.overallNote ?? 0,
+          filesDetails
+        };
+      });
+
+      res.json({ success: true, analysis: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: 'Erro interno do servidor', message: error.message });
+    } finally {
+      await client.close();
+    }
+  })();
+});
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`)
 })
+
+

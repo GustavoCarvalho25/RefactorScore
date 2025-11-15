@@ -27,7 +27,7 @@ export const useAnalysisStore = defineStore('analysis', {
     
     averageOverallNote: (state) => {
       if (state.analyses.length === 0) return 0;
-      const sum = state.analyses.reduce((acc, analysis) => acc + analysis.overallNote, 0);
+      const sum = state.analyses.reduce((acc, analysis) => acc + (analysis.OverallNote ?? 0), 0);
       return sum / state.analyses.length;
     },
   },

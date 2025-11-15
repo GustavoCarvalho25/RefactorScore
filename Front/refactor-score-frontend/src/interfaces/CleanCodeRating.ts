@@ -6,7 +6,8 @@ export interface CleanCodeRating {
   deadCode: number;
   note: number;
   quality: string;
-  justifies: Record<string, string>;
+  justifications?: Record<string, string>;
+  justifies?: Record<string, string>;
 }
 
 export enum RatingQuality {
